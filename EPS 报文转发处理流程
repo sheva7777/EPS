@@ -1,0 +1,14 @@
+1、EQM主动轮询各个端口的反压状态，没有反压的端口间轮询调度送入无反压通道的PRE_FD，EPS给的反压状态按照各PRE_FD_FIFO的空满状态给出。
+2、EPS得到EQM调度的PRE_FD后存入对应通道的PRE_FD_FIFO中，由DSCH模块调度选出一个PRE_FD，根据PRE_FD的HCAP和长度信息从MEMP或DDR里读出报文真正的FD和数据。
+3、DSCH模块通过SP+RR调度出相应的通道PRE_FD，并产生读命令发给DMUX模块，每个读命令对应一个160byte/256Byte数据块，并同时将读命令信息存入BI_FIFO。MEMP或DDR返回的数据中每个报文第一拍是FD，接下来是DATA。得到新的FD后，将FD信息更新到当前通道的切片状态信息表中，这时开始轮询下一个端口。下一次轮询时根据真实的包长决定是否继续向MEMP或DDR申请数据，如果报文存储在IFB或EFB的CELL已经切完，需要发出查询当前通道的下一个cell的地址的操作。当查询的下一个cell地址返回后将其存储到RAM并更新NCAP有效的状态信息。
+4、DMUX模块根据NCAP将读命令发送给MEMP/DMC，将DMC返回的数据存在外部的DATA_RBUF中或者接收MEMP的DATA_RBUF返回的数据。
+5、MERGE模块轮询调度出BI_FIFO中的切片命令，根据切片命令从DMUX模块中读出切片数据。将切片数据加上sop、eop以及mod等控制信息之后存入TX_BUF中。
+6、TX_BUF模块根据各个端口的发送方式将报文发送出去。
+各通道的FD/切片使用SP+RR调度，支持优先级抢占，调度策略为：
+Curr _Jumbo_Port > PON_CURR_SP > PON_CURR_NM > PON_NEXT_SP > PON_NEXT_NM > PON_CURR > PON_NEXT > (OTH+PON_others)RR
+
+OTH包含的端口有：6*GE+4*PIE+PRBS+WOE
+为了防止jumbo帧的调度欠载，当jumbo帧的切片大于Txbuf的反压水线开始提高jumbo帧的调度优先级，如果多个端口存在jumbo帧则按照PON+OTH进行RR轮询，如果PON口多个Tcont存在jumbo帧，则PON口内部先进行CURR>NEXT>PON_RR调度后再与OTH进行RR。即Curr_jumbo_Port的内部的调度为：
+((PON_CURR_SP > PON_CURR_NM > PON_NEXT_SP > PON_NEXT_NM > PON_CURR > PON_NEXT > PON_RR) + OTH(jumbo))RR
+OTH(jumbo)包含的端口有：6*GE
+
