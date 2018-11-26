@@ -1,0 +1,316 @@
+3.5.1	模块反压
+3.5.1.1	EQM接口反压
+1、	PRE_FD_FIFO将满反压，FIFO深度为8，反压水线可配置，缺省将满水线为5；
+2、	PRE_FD_FIFO读出到FD_FIFO写入的通路反压，反压水线可配置，保证FD_FIFO不溢出。
+
+3.5.1.2	DSCH所受反压
+数据调度有几个反压点：
+1、	BI_FIFO的将满反压。
+2、	TXBUF通路反压，根据txbuf深度计算通道最多可以发送的IFB/EFB切片命令个数，以1行16Byte为单位，发送一个读命令+(rlen/16B)，tx_buf发送1行16B数据减1；达到门限后反压；以保证TX_BUF可以容纳所有BI_FIFO的切片命令；
+3、	DMC/MEMP 的not_ready 的反压；
+4、	RBUF通路反压，根据Rbuf深度计算通道最多可以发送的DDR切片命令个数，以1行16Byte为单位，发送一个DDR读命令+(rlen/16B)，Rbuf发送1行16B数据减1；达到门限后反压；以保证RBUF可以容纳所有BI_FIFO的切片命令；
+5、	向FAM查询CELL NCAP反压；
+
+3.5.1.3	MERGE所受的反压
+1、	RBUF通路反压，根据Rbuf深度计算通道最多可以读取BI_FIFO命令个数，BI_FIFO读取一个加1，读取Rbuf 1个burst数据减1；达到门限后反压；以保证RBUF可以容纳所有BI_FIFO的切片命令；
+2、	FAM释放反压；
+
+3.5.2	路径反压
+3.5.2.1	 GE路径反压
+当GE MAC模块的请求发送信号gex_eps_req信号在比较长的时间内保持无效状态，将会反压相应的ge物理端口，反压DSCH模块ge端口的调度，相应的FD_FIFO将满反压相应PRE_FD_FIFO的调度，PRE_FD_FIFO将满反压EQM，相应bit的eps_eqm_ge_xoff信号拉高。
+PON路径反压
+1、当PON相应的tcont逻辑通道长时间没有相应有效的pon_eps_cmd_req信号，反压DSCH模块相应tcont逻辑端口，相应的FD_FIFO将满反压相应PRE_FD_FIFO的调度，PRE_FD_FIFO将满反压EQM，相应bit的eps_eqm_ghn_xoff信号拉高。
+2、当PON MAC模块的请求发送信号ghn_eps_req信号在比较长的时间内保持无效状态，将会反压所有的PON逻辑端口，反压DSCH模块所有cid逻辑端口的调度，相应的FD_FIFO将满反压相应PRE_FD_FIFO的调度，PRE_FD_FIFO将满反压EQM，eps_eqm_ghn_xoff信号拉高。
+
+3.5.2.3	 PIE路径反压
+1、当PIE模块的直接反压信号pie_eps_bp信号某个bit拉起后，相应的PIE虚拟端口，该虚拟端口对应的全部逻辑通道被反压，反压DSCH模块相应PIE虚拟端口的调度，相应的FD_FIFO将满反压相应PRE_FD_FIFO的调度，PRE_FD_FIFO将满反压EQM，相应bit的eps_eqm_pie_xoff信号拉高。
+2、当PIE模块的请求发送信号pie_eps_req信号在比较长的时间内保持无效状态，将会反压所有的PIE虚拟端口，反压DSCH模块所有PIE虚拟端口的调度，相应的FD_FIFO将满反压相应PRE_FD_FIFO的调度，PRE_FD_FIFO将满反压EQM，eps_eqm_pie_xoff信号拉高。
+
+3.5.2.4	 PRBS路径反压
+当PRBS模块的请求发送信号prbs_eps_req信号在比较长的时间内保持无效状态，将会反压所有的PRBS端口，反压DSCH模块PRBS端口的调度，相应的FD_FIFO将满反压相应PRE_FD_FIFO的调度，PRE_FD_FIFO将满反压EQM，eps_eqm_prbs_xoff信号拉高。
+
+3.6	性能评估
+3.6.1	性能需求
+EPS切片调度最快8拍调度出一个160Byte数据块，但由于EPS和缓存的接口是128bit，EPS Merge模块需要15拍才能读完一个160Byte的数据块，则一般情况下，调度器会受到MERGE的反压，实际的调度是15拍调度一个160Byte的数据块。则EPS的内部处理带宽为：
+250MHz：  (160Byte * 8) ÷15* 250Mhz = 21.3Gbps 
+所有端口并发线速4GE(4G)+10GEPON(10G)+RGMII(1G)+1PIE(3G)=18Gbps。
+如果频率是250MHz，性能可以满足带宽需求。
+
+3.6.2	DDR延时要求
+EPS支持IFB/EFB外置转发，最快每8拍调度1个报文，性能主要受限于DDR的性能。
+报文长度少于等于112B时，只有1个DDR命令，EPS每8拍调度1个报文，性能不受修改影响；
+报文长度等于113字节（不含CRC）时，性能最差，需要两个读命令，第一读命令为112B，第二个读命令为1B， 且第二个读命令需要等待第一个读命令的数据返回后才能发出，那么整包返回到EPS TxBuf 就是1个读命令的平均时延，而113B报文的发送时间为：
+(113B+ 24B)* 8bit / 1Gbps = 1096ns
+如果DDR的平均延时能少于1096ns时能保证113字节 报文线速发送；
+当有两个端口交织发送，报文长度等于113字节（不含CRC）时，EPS总的处理性能为2描述的两倍。
+当包长为112+128+1B这种的情况下，需要3个读命令，因为CELL大小为256B， 后面的命令只需要在第一个命令返回后就可以发出，所以情况比2要好；
+当包长为112+128+64B+1B的情况下，需要4个读命令，最后一个读命令也在第一个数据块获得后就可以知道，所以比情况2要好。
+综上所述，只要DDR平均延时少于1096ns，EPS就可以满足报文长度113字节最差性能的端口线速要求。
+
+3.7	ECC说明
+表31 PE模块RAM资源列表
+RAM名称	深度	位宽	性质	类型	个数	说明	ECC
+SHARE_RAM	744	82	FD_FIFO、BI_FIFO、INFO_RAM复用的RAM	SP-RAM	1	用于存放报文FD，读切片块信息，报文历史切片信息，存储的内容都包括报文的缓存地址和报文长度等信息。	需要进行ECC
+使用Wapper
+SHARE_RAM	744	82	FD_FIFO、BI_FIFO、INFO_RAM复用的RAM	SP-RAM	1	用于存放报文FD，读切片块信息，报文历史切片信息，存储的内容都包括报文的缓存地址和报文长度等信息。	需要进行ECC
+使用Wapper
+PON_TXB_LINK_TB	768	10	链表	SP-RAM	1	PON口Txbuffer 链表	需要进行ECC
+使用Wapper
+
+ECC校验的RAM的ECC错误处理建议
+RAM	校验方式	ECC错误后果	软件处理建议
+DQM-EPS FD带内ECC校验	ECC 	带内ECC校验，用于校验报文FD，如果出现2bit错误无法纠正情况，可能会出现缓存泄露或系统挂死。	重启芯片
+SHARE_RAM_A	ECC
+ECC_MODE=4	带内ECC校验，用于校验报文地址等信息，如果出现2bit错误无法纠正情况，可能会出现缓存泄露或系统挂死。	重启芯片
+SHARE_RAM_B	ECC
+ECC_MODE=4	带内ECC校验，用于校验报文地址、长度等重要信息，如果出现2bit错误无法纠正情况，可能会出现缓存泄露或系统挂死。	重启芯片
+PON_TXB_LINK_TB	ECC
+ECC_MODE=4	带内ECC校验，用于校验缓存地址信息，如果出现2bit错误无法纠正的情况，可能会出现PON口业务不通。	重启芯片
+
+4	RAM列表
+Memory名称	按实际逻辑应用功能的Memory规格	类型（SP/TP/DP）	频率（较高的频率）
+	深度(word)	实际宽度(bit)	数量		
+	16	139	1	TP	250M
+	16	137	1	TP	250M
+	16	16	1	TP	250M
+	16	151	1	TP	250M
+	8	72	1	TP	250M
+	8	156	1	TP	250M
+	128	79	1	SP	250M
+
+5	异步处理
+pon_pri_preempt_mode信号通过CBB打两拍处理。
+
+6	表项冲突处理
+EPS共有2个表项：EPS入口统计表、DMAC索引统计表；
+EPS入口统计表有三个请求源：清零、逻辑读写、CPU读写，优先级为：清零 > 逻辑读写 > CPU读写；
+
+7	丢包点
+超短包丢弃（从DMAC起算包长小于等于16字节），释放缓存。
+body长度为0的报文丢弃，头长度小于配置的长度（头长度是包含FD、扩展FD和PIE/PRBS的控制信息的长度，最小30字节）；丢包不释放缓存。
+出端口错报文丢弃，可配置是否释放缓存。
+FD ECC校验错报文丢弃，不释放缓存。
+ETH口flush丢包，释放缓存丢弃。
+
+7.1	报文HEAD长度错误(fd_hl_err)
+丢包类型	报文HEAD长度错误(fd_hl_err)
+丢包目的	保证后续子模块（merge）正常处理
+历史芯片处理	取出FD给过来的hl，与配置值cfg_hl_len进行比较，cfg_hl_len默认值是32。小于32时，fd_hl_err拉高。
+5118V200：没有ext_fd，该功能表示各端口报文头的净荷小于16Byte时告警。
+5117PV100：有ext_fd，且修改了后续merge模块，使报文头的净荷小于16Byte时，能正常通过。该功能过滤净荷小于16Byte不准确（可以过滤有ext_fd，但hl小于32的报文）。
+fd_hl_err为1时，不申请数据，不会释放缓存，同时产生告警。
+5182HV100处理	EQM给过来的压缩长度在组播片外报文时，表示至少32Byte，所以没办法对hl进行判断。必须在FD返回后根据实际长度进行判断，处理如下：
+1、	1、剥离掉FD、EXT_FD之后，组播报文判断hl等于0时，fd_hl_err拉高。
+2、	2、根据EQM给过来的长度申请数据，并丢弃数据；
+3、	3、不进行WAN口统计；
+4、	4、不进行LM统计；
+5、	5、不释放缓存；
+6、	6、产生告警。
+7、	注：默认EQM给过来的长度是正确的，后面的问题处理也是基于这个前提。
+结果不同点	5182HV100：1、剥离掉EXT_FD之后再判断hl是否等于0；2、必须丢弃返回后的数据。
+
+7.2	报文BODY长度错误(fd_bl_err)
+丢包类型	报文BODY长度错误(fd_bl_err) 
+丢包目的	保证后续子模块（merge）正常处理(前级模块已有保证bl不为0)
+历史芯片处理	取出FD给过来的bl长度判断是否为0，等于0时，fd_bl_err拉高。
+fd_bl_err为1时，不申请数据，不会释放缓存，同时产生告警。
+5182HV100处理	EQM给过来的压缩长度表示至少16Byte；组播片内时，没有表示bl的信息，所以没办法进行判断。FD返回后根据实际长度进行判断。
+处理如下：
+1、	1、单播报文剥离掉FD、EXT_FD，组播报文不需要剥(FD、EXT_FD信息在HEAD)，判断bl等于0时，fd_bl_err拉高；
+2、	2、根据EQM给过来的长度申请数据，并丢弃数据；
+3、	3、不进行WAN口统计；
+4、	4、不进行LM统计；
+5、	5、不释放缓存；
+8、	6、产生告警。
+结果不同点	5182HV100：1、判断条件是单播剥离FD、EXT_FD，组播不需要剥，然后再判断；2、必须丢弃返回后的数据；
+
+7.3	报文总长度错误(plen_less_16b、pon_glit_pkt)
+丢包类型	报文总长度错误(plen_less_16b、pon_glit_pkt) 
+丢包目的	保证后续子模块（merge）正常处理
+历史芯片处理	取出FD给过来的hl、bl，再减去FD、EXT_FD，判断是否小于16Byte。
+5118V200：只对PON口进行判断，没有区分NNI_GE口。
+5117PV100：对所有口进行判断，NNI_GE是32Byte，其他口是16Byte。
+plen_less_16b | pon_glit_pkt为1时，不申请数据，不会释放缓存，同时产生告警。
+5182HV100处理	EQM给过来的压缩长度表示至少16；组播片内时，没有表示bl的信息，所以没办法进行判断。在FD返回后根据实际长度进行判断。处理如下：
+1、	1、FD返回后，根据实际长度减去FD、EXT_FD，除PON口外的所有端口判断小于16Byte时，plen_less_16b拉高。
+2、	2、PON口可配置成不丢，或者小于16Byte或32Byte时丢（为了继承前项目NNI_GE只能配32Byte，5182HV100项目NNI_GE可以支持17Byte~32Byte的数据）。
+3、	3、丢弃数据；
+4、	4、不进行WAN口统计；
+5、	5、不进行LM统计；
+6、	6、释放缓存；
+7、	7、产生告警。
+结果不同点	5182HV100：1、必须丢弃返回后的数据；2、释放缓存。
+基于长度的统计如下：
+1、净荷小于或等于32时进行毛刺包统计（PIE口也剥离VAR_INFO）；
+2、净荷小于或等于64时，进行短包统计；
+3、净荷大于或等于9601时，进行长包统计。
+
+7.4	出端口错误(fd_ech_err)
+丢包类型	出端口错误(fd_ech_err) 
+丢包目的	不影响正常业务
+历史芯片处理	判断ech不等于所有端口的编码时，fd_ech_err拉高。
+丢弃使能可配--err_ech_fd_drop_en，默认值是0，即不丢弃。
+配置为丢弃时，不申请数据，不会释放缓存。
+配置为不丢弃时，会发到PIE的通道0，同时FD带上1bit fd_ech_err信息，会释放缓存。
+丢不丢弃都会执行的操作：
+1）产生告警；
+2）在pie_pre_fdff_cnt大于或等于5时，反压全部端口（反压之后只会再写入2个报文）；
+3）不进行端口统计。
+历史芯片处理	判断ech不等于所有端口的编码时，fd_ech_err拉高。
+丢弃使能可配--err_ech_fd_drop_en，默认值是0，即不丢弃。
+配置为丢弃时，不申请数据，不会释放缓存。
+配置为不丢弃时，会发到PIE的通道0，同时FD带上1bit fd_ech_err信息，会释放缓存。
+丢不丢弃都会执行的操作：
+1）产生告警；
+2）在pie_pre_fdff_cnt大于或等于5时，反压全部端口（反压之后只会再写入2个报文）；
+3）不进行端口统计。
+5182HV100处理	从EQM可以获得ech，判断是否错误。处理如下：
+前面收到EQM的信息时，判断出fd_ech_err是否拉高，丢弃使能可配--err_ech_fd_drop_en，默认值是0，即不丢弃。
+配置为丢弃时，不申请数据，不会释放缓存，同时也没反馈信息（shap，sec，cell）给EQM，会造成带宽不准。
+配置为不丢弃时：会发到PIE的通道0，同时FD带上1bit fd_ech_err信息，会释放缓存。
+丢不丢弃都会执行的操作：
+1）产生告警；
+2）在pie_pre_fdff_cnt大于或等于5时，反压全部端口（反压之后只会再写入2个报文）；
+3）不进行端口统计。
+结果不同点	5182HV100：只有配置丢弃时有不同点。
+1、在收到EQM的FD时丢弃，没有信息反馈给EQM，会造成带宽不准。
+
+7.5	FD ECC校验错误(one_bit_ecc_err、two_bit_ecc_err)
+丢包类型	FD ECC校验错误(one_bit_ecc_err、two_bit_ecc_err)
+丢包目的	不影响正常业务
+历史芯片处理	通过ECC校验产生。
+one_bit_ecc_err、two_bit_ecc_err有一个为1时，锁存当前hcap信息。产生中断。
+two_bit_ecc_err为1时不申请数据，不会释放缓存，不反馈给EQM信息（shap、sec、cell）。
+5182HV100处理	通过ECC校验产生(采用新的CBB)。
+one_bit_ecc_err、two_bit_ecc_err有一个为1时，锁存当前hcap信息。产生中断。
+two_bit_ecc_err为1时，相对于前面4个ERR，ECC的优先级最高，不反馈给EQM信息（shap、sec、cell）。
+需要丢数据，FD返回后将hb_num、hb_left、bb_num、bb_left被替换成EQM给过来的压缩长度进行申请数据(如果是组播IFB报文，则EQM没有指示BODY长度，这时候固定给1Byte，后续分片按1Byte调度和释放)，并丢弃，同时释放缓存。
+注：EQM的压缩长度在组播报文时是32Byte，而IFB/EFB的CELL大小都是32的倍数，所以不会有多余的CELL，可以释放缓存。
+结果不同点	5182HV100：1、按EQM的压缩长度来申请数据，并丢弃；2、按EQM的压缩长度来释放缓存。
+
+7.6	FD长度错误(fd_len_err)
+丢包类型	FD返回的长度比EQM的压缩长度小(fd_len_err)
+丢包目的	不影响正常业务
+历史芯片处理	无
+5182HV100处理	将FD返回的长度与EQM的压缩长度进行比较，如果小于EQM的压缩长度，fd_len_err拉高。
+1、	产生告警；
+2、	丢数据，按EQM的压缩长度来申请数据并丢弃；
+3、	不释放释存；
+结果不同点	无
+
+7.7	ETH口flush丢包
+丢包类型	ETH口flush丢包
+丢包目的	不影响正常业务
+历史芯片处理	根据配置丢弃GE口TXBUF的数据
+5182HV100处理	根据配置丢弃GE口TXBUF的数据
+结果不同点	无
+
+7.8	丢包实现说明
+7.8.1	报文HEAD长度错误
+1）	根据返回后的FD信息，提取实际长度，组播报文（单播在整包长度判断）剥离掉FD、EXT_FD之后，判断hl是否等于0；如果等于0，则将fd_hl_err拉高；否则拉低。
+2）	根据fd_hl_err为1时，将FD返回的长度信息替换成EQM给过来的压缩长度，即以EQM给过来的长度为准来申请数据。
+3）	根据fd_hl_err为1时，锁存1bit drop_flag信息，在rd_end时清零；
+4）	将fd_hl_err信息写到burst_info_ram中，后续分片读出该信息进行丢弃数据。
+5）	首个CELL根据drop_flag信息，丢弃FD之后的数据，FD信息还会往下走，但不会给到后续模块。
+6）	非首CELL根据burst_info_ram中的error信息，丢弃整个分片的数据。
+7）	这种丢弃不会释放缓存；
+8）	根据fd_hl_err产生告警；
+9）	根据fd_hl_err为1时不进行WAN口统计；
+10）	根据fd_hl_err为1时，EXT_FD也被丢弃，不会进行LM统计；
+
+7.8.2	报文BODY长度错误
+1）	根据返回后的FD信息，提取实际长度，单播报文（组播报文在HEAD剥离）剥离掉FD、EXT_FD之后，判断bl是否等于0；如果等于0，则将fd_bl_err拉高；否则拉低。
+2）	根据fd_bl_err为1时，将FD返回的长度信息替换成EQM给过来的压缩长度，即以EQM给过来的长度为准来申请数据。
+3）	根据fd_bl_err为1时，锁存1bit drop_flag信息，在rd_end时清零；
+4）	将fd_bl_err信息写到burst_info_ram中，后续分片读出该信息进行丢弃数据。
+5）	首个CELL根据drop_flag信息，丢弃FD之后的数据，FD信息还会往下走，但不会给到后续模块。
+6）	非首CELL根据burst_info_ram中的error信息，丢弃整个分片的数据。
+7）	这种丢弃不会释放缓存；
+8）	根据fd_bl_err产生告警；
+9）	根据fd_bl_err为1时不进行WAN口统计；
+10）	根据fd_hl_err为1时，EXT_FD也被丢弃，不会进行LM统计；
+
+7.8.3	报文总长度错误
+1）	根据返回后的FD信息，提取实际长度，剥离掉FD、EXT_FD之后，判断总长度是否小于16，PON口可配置是否小于32或者不丢（保留NNI_GE原先需要配32）。如果满足条件，则将plen_less_16b拉高；否则拉低。
+2）	根据plen_less_16b为1时，锁存1bit drop_flag信息，在rd_end时清零；
+3）	这种场景只有一个CELL，根据drop_flag信息，丢弃FD之后的数据，FD信息还会往下走，但不会给到后续模块。
+4）	这种丢弃会释放缓存；
+5）	根据plen_less_16b产生告警；
+6）	根据plen_less_16b为1时不进行WAN口统计；
+7）	根据plen_less_16b为1时，EXT_FD也被丢弃，不会进行LM统计；
+
+7.8.4	出端口错误
+1）	根据EQM给过来的ech与所有端口编号进行对比，如果都没匹配上，则将pre_fd_ech_err置1，否则置0。
+2）	如果pre_fd_ech_err为1，则将err_chid_chk一直拉高，再根据glb_bp_en是否配置为1，配为1时在pie通道的aful拉高时反压所有端口；配为0时，正常。
+3）	根据pre_fd_ech_err是否为1，产生告警。
+4）	根据err_ech_fd_drop_en配置是否丢弃；
+如果配置成丢弃，则PRE_FD信息不写入PRE_FDFF，即pre_fdff_wen为0。（该情况下没有申请FD，所以也没做端口统计、WAN口统计和LM统计）。
+如果配置成不丢弃，则将1bit ech_err信息带到PRE_FDFF，FD返回时，1bit的ech_err信息也跟着返回，判断ech_err为1时不做端口统计、但还会做WAN口统计、LM统计。
+
+7.8.5	FD ECC校验错误
+1）	根据返回后的FD信息，进行ECC校验，得到2bit信息—one_bit_ecc_err、two_bit_ecc_err。
+2）	根据one_bit_ecc_err、two_bit_ecc_err有一个为1时，锁存当前hcap信息，用于debug。
+3）	根据one_bit_ecc_err、two_bit_ecc_err有一个为1时，产生中断。
+4）	two_bit_ecc_err为1时，相比其他ERROR，优先级最高。
+5）	根据two_bit_ecc_err为1将FD返回的长度信息替换成EQM给过来的压缩长度(如果是组播IFB报文，则EQM没有指示BODY长度，这时候固定给1Byte，后续分片按1Byte调度和释放)，即以EQM给过来的长度为准来申请数据。
+6）	根据two_bit_ecc_err为1时，锁存1bit drop_flag信息，在rd_end时清零；
+7）	将two_bit_ecc_err信息写到burst_info_ram中，后续分片读出该信息进行丢弃数据。
+8）	首个CELL根据drop_flag信息，丢弃FD之后的数据，FD信息还会往下走，但不会给到后续模块。
+9）	非首CELL根据burst_info_ram中的error信息，丢弃整个分片的数据。
+10）	这种丢弃会释放缓存（只释放EQM指示的长度）；
+11）	根据two_bit_ecc_err为1时不进行WAN口统计；
+12）	根据two_bit_ecc_err为1时，EXT_FD也被丢弃，不会进行LM统计；
+
+7.8.6	FD长度错误
+1）	根据返回后的FD信息，提取实际长度，换算成与EQM的压缩长度一致的长度。
+2）	根据FD的压缩长度与EQM的压缩长度对比，如果小于EQM的压缩长度，则将fd_len_err拉高。
+3）	根据fd_len_err为1将FD返回的长度信息替换成EQM给过来的压缩长度，即以EQM给过来的长度为准来申请数据。
+4）	根据fd_len_err为1时，锁存1bit drop_flag信息，在rd_end时清零；
+5）	这种场景只有一个CELL，根据drop_flag信息，丢弃FD之后的数据，FD信息还会往下走，但不会给到后续模块。
+6）	这种丢弃不会释放缓存；
+7）	根据fd_len_err产生告警；
+8）	根据fd_len_err为1时不进行WAN口统计；
+9）	根据fd_len_err为1时，EXT_FD也被丢弃，不会进行LM统计；
+
+7.8.7	ETH口flush丢包
+lush丢包可以配置成：00：连续抽包；01：每隔(8/f*1000)ns抽包一次；10：每隔(16/f*1000)ns抽包一次；11：每隔(32/f*1000)ns抽包一次；
+连续抽包会导致读的速度过快，而ETH的优先级是最高的，会影响PIE、PRBS、WOE口，所以一般配置按频率来抽包。
+在flush_en有效时，ge_eps_req一定是无效的。所以用flush_req代替ge_eps_req，按正常流程处理。
+在TXBUF有报文的情况下，如果是连续抽包，则马上可以读出来，读的起点位置是任意的，即输出给GE口时，可能没有eop，读的终点位置一定是到eop结束。
+读数据的调度是按拍来，所以不连续抽包是隔一段时间发一次读的使能，从一个报文的任意位置，读到包尾就停止，或者没有报文可读。
+
+9	修改点
+代码如果在5118V200的基础上修改，需要参考5117P：
+1、	LM统计和编辑；
+2、	flush功能；
+3、	PIE口的Txbuf基于8个队列反压；
+4、	PIE 4个虚拟端口RR调度；
+5、	扩展FD处理；
+6、	参数化；
+7、	FD_FX的pre_fd_fifo采用for语法的写法；
+8、	efb_cell可配。
+代码如果在5117P的基础上修改，需要参考5118：
+1、	Txbuf链表实现；
+2、	有XFI口，相应的调度需要考虑进去；
+3、	PON口是10G PON
+4、	ECC。
+参考5651：
+1、	PIE映射；
+2、	PIE位宽64bit；
+3、	DDR BANK交织。
+另外需要新加的：
+1、	删除FD_FIFO，不需要原先调度PRE_FD_FIFO的功能，直接从DSCH调度，由EQM传过来9bit的len信息，先读一部分报文，再根据返回的真实len读完后续数据；其中二次环回端口只需要读出FD即可；
+2、	PRBS接口位宽改成64bit；
+3、	新增一个WOE端口；
+4、	新增一个2.5GE口；
+5、	tcont从32/8改成16；
+6、	PRE_FD增加相关域，给到shapping接口；
+7、	增加TraceCounter的三种统计；
+8、	DMC地址BANK交织方式可配置；
+9、	DMC接口DEBUG信号；
+10、	NNI_GE接口最小报文长度改成17Byte。
+
+
+
+
+
