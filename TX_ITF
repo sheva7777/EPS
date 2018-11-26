@@ -1,0 +1,434 @@
+模块介绍
+发送缓存模块，主要是包含各个MAC接口模块和动态调频模块。各个MAC接口模块主要实现接口数据的缓存和产生各个MAC接口信号。动态调频模块是联合EQM模块进行报文个数统计，根据统计结果与配置的门限比较而产生相应的调频请求。
+
+接口信号描述
+表24 TX_ITF接口信号表
+Name	Width	Direction	Description
+TOP
+clk_sys_dp	1	I	DP时钟信号。
+rst_dp_n	1	I	DP逻辑复位信号，低电平有效。
+clk_dp_2x	1	I	DP时钟的二倍频信号
+ctrl_bus[9:0]	10	I	CTRL_BUS
+dft_ctrl_bus[4:0]	5	I	DFT_CTRL_BUS
+eps_prc_busy	1	O	当EQM-EPS通路上有报文处理时，此信号为1；用于EPS低功耗使用
+sync_eps	1	I	EPS子模块同步指示信号
+EQM ITF
+eqm_eps_enq_vld	1	I	EQM入队有效指示
+eqm_eps_enq_chid	8	I	EQM入队通道号
+MERGE ITF
+merge_oth_wr	1	I	TX_BUF的写使能
+merge_oth_wchid	5	I	写通道ID。
+0-5： ETH0...5；
+6~9  ： PIE0…PIE3 ；
+12 ： PRBS；
+13 ： WOE
+merge_oth_wdata	131	I	TX_BUF的写数据
+oth_merge_afull0	1	O	OTH_TXFIFO的IFB数据将满信号
+oth_merge_afull1	1	O	OTH_TXFIFO的EFB数据将满信号
+DSCH  ITF
+oth_txitf_dec	12	O	TX_ITF发送数据的指示
+GE MAC ITF
+gex_eps_req	1	I	ge_mac数据请求信号， 当为高时，表示ge_mac可以接收来自eps的数据
+eps_gex_wr	1	O	写使能信号。
+eps_gex_wdata[15:0]	16	O	写数据总线，一次传输2byte。
+eps_gex_sop	1	O 	发送帧头信号，当发送帧控制信息的第一拍数据时此信号有效。
+eps_gex_eop	1	O	发送帧尾信号，当发送一个帧的最后一拍数据时此信号有效。
+eps_gex_lbo	1	O	包尾最后一个cycle标识16bit中的有效字节的位置。
+1：[15:0]有效；0：[15:8]有效。
+NNI GE ITF
+nge_eps_req	1	I	nge_mac数据请求信号， 当为高时，表示nge_mac可以接收来自eps的数据
+eps_nge_wr	1	O	写使能信号。
+eps_nge_wdata[15:0]	16	O	写数据总线，一次传输2byte。
+eps_nge_sop	1	O	发送帧头信号，当发送帧控制信息的第一拍数据时此信号有效。
+eps_nge_eop	1	O	发送帧尾信号，当发送一个帧的最后一拍数据时此信号有效。
+eps_nge_lbo	1	O	包尾最后一个cycle标识16bit中的有效字节的位置。
+1：[15:0]有效；0：[15:8]有效。
+eps_nge_1588	1	O	SOP 时有效。
+NNI XGE ITF
+nxge_eps_req	1	I	xge_mac数据请求信号， 当为高时，表示xge_mac可以接收来自eps的数据
+eps_nxge_wr	1	O	写使能信号。
+eps_nxge_wdata[63:0]	64	O	写数据总线，一次传输8byte。
+eps_nxge_sop	1	O	发送帧头信号，当发送帧控制信息的第一拍数据时此信号有效。
+eps_nxge_eop	1	O	发送帧尾信号，当发送一个帧的最后一拍数据时此信号有效。
+eps_nxge_lbo[2:0]	3	O	包尾最后一个cycle标识64bit中的有效字节的位置。
+0：[63:56]有效；
+1：[63:48]有效；
+2：[63:40]有效；
+3：[63:32]有效；
+4：[63:24]有效；
+5：[63:16]有效；
+6：[63:8]有效；
+7：[63:0]有效。
+eps_nxge_1588	1	O	SOP 时有效。
+PRBS ITF
+prbs_eps_req	1	I	prbs数据请求信号， 当为高时，表示PRBS可以接收来自eps的数据
+eps_prbs_wr	1	O	写使能信号。
+eps_prbs_wdata[63:0]	64	O	写数据总线，一次传输8byte。
+eps_prbs_sop	1	O	发送帧头信号，当发送帧控制信息的第一拍数据时此信号有效。
+eps_prbs_eop	1	O	发送帧尾信号，当发送一个帧的最后一拍数据时此信号有效。
+eps_prbs_mod[2:0]	3	O	包尾最后一个cycle标识16bit中的有效字节的位置。
+0：eps_data[63:0]有效；
+7：eps_data[63:8]有效；
+6：eps_data[63:16]有效；
+5：eps_data[63:24]有效；
+4：eps_data[63:32]有效；
+3：eps_data[63:40]有效；
+2：eps_data[63:48]有效；
+1：eps_data[63:56]有效；
+eps_prbs_lb	1	O	环回报文指示，SOP有效。
+PIE ITF
+pie_eps_req	1	I	PIE数据请求信号， 当为高时，表示PIE可以接收来自eps的数据
+pie_eps_bp	8	I	PIE反压EPS信号
+eps_pie_wr	1	O	写使能信号。
+eps_pie_wdata[63:0]	64	O	写数据总线，一次传输8byte。
+eps_pie_sop	1	O	发送帧头信号，当发送帧控制信息的第一拍数据时此信号有效。
+当sop有效时，送出的是wdata[10:0]是帧长度pkt_len，该长度指示除sop这一拍之外一直到EOP的报文长度。
+eps_pie_eop	1	O	发送帧尾信号，当发送一个帧的最后一拍数据时此信号有效。
+eps_pie_mod	1	O	包尾最后一个cycle标识16bit中的有效字节的位置。
+0：eps_data[63:0]有效；
+7：eps_data[63:8]有效；
+6：eps_data[63:16]有效；
+5：eps_data[63:24]有效；
+4：eps_data[63:32]有效；
+3：eps_data[63:40]有效；
+2：eps_data[63:48]有效；
+1：eps_data[63:56]有效；
+eps_pie_chid[2:0]	3	O	PIE队列ID，从eps_pie_sop开始到eps_pie_eop结束均有效。
+WOE ITF
+woe_eps_req	1	I	PIE数据请求信号， 当为高时，表示PIE可以接收来自eps的数据
+eps_woe_wr	1	O	写使能信号。
+eps_woe_wdata[63:0]	64	O	写数据总线，一次传输8byte。
+eps_woe_sop	1	O	发送帧头信号，当发送帧控制信息的第一拍数据时此信号有效。
+当sop有效时，送出的是wdata[13:0]是帧长度pkt_len，wdata的高2比特填零。
+eps_woe_eop	1	O	发送帧尾信号，当发送一个帧的最后一拍数据时此信号有效。
+eps_woe_mod[2:0]	3	O	包尾最后一个cycle标识64bit中的有效字节的位置。
+0：eps_data[63:0]有效；
+7：eps_data[63:8]有效；
+6：eps_data[63:16]有效；
+5：eps_data[63:24]有效；
+4：eps_data[63:32]有效；
+3：eps_data[63:40]有效；
+2：eps_data[63:48]有效；
+1：eps_data[63:56]有效；
+PON MAC ITF
+pon_eps_curr_vld	1	I	当前处于发送状态的TCONT/LLID有效指示
+pon_eps_curr[3:0]	4	I	当前处于发送状态的TCONT/LLID NUM
+pon_eps_next_vld	1	I	下一个将进入发送状态的TCONT/LLID有效指示
+pon_eps_next[3:0]	4	I	下一个将进入发送状态的TCONT/LLID NUM 
+pon_eps_req[15:0]	16	I	EPS_PON数据请求信号
+pon_eps_rding_vld	1	I	EPS_PON 当前正在读TCONT/LLID有效指示
+pon_eps_rding[3:0]	4	I	EPS_PON 当前正在读TCONT/LLID NUM
+eps_pon_wr	1	O	EPS发送数据到EPS_PON帧数据写使能，高有效。REQ拉低之后最多写出11拍的数据。
+eps_pon_sop	1	O	EPS发送帧头指示，高有效
+eps_pon_eop	1	O	EPS发送帧尾指示，高有效
+eps_pon_wchid[3:0]	4	O	当前发送数据的T_CONT/LLID号码（EPON 0~15，GPON 0~15  GE 0）
+eps_pon_wdata[127:0]	128	O	EPS发送到EPS_PON的数据和帧头信息
+pon_eps_eop_dec	1	O	EPS_PON发送FIFO帧结束指示，EPS用于入队统计。
+pon_pri_preempt_mode	1	I	0：普通模式；1：抢占模式
+eps_pon_txb_empty	16	O	TXBUF非空标识
+eps_pon_ecc_code	7	O	EPS和EPS_PON的带外ECC数据。EPS_PON只在NGPON 2.5G/10G两种模式下使用，其他模式兼容5118V100使用帧头信息带内ECC的方式。
+EPS_DIO 表项 INTF
+eps_dio_cs[1:0]	2	I	[0]：入口统计表项片选；
+[1]：DMAC统计表项片选
+eps_dio_rw	1	I	CPU给的表项的读写使能，高写低读
+eps_dio_addr[8:0]	9	I	CPU给表项的读写地址
+eps_dio_wdata[31:0]	32	I	CPU给表项的写数据
+eps_eth_load_rdy	1	O	返回给CPU的读写ready握手信号
+EPS_DIO 配置&统计寄存器
+ethx_tx_mode	1	I	以太口发送模式选择，0：整包发送；1：字节发送
+ethx_tx_th	10	I	以太网口字节发送模式的发送水线
+pon_tx_mode	1	I	PON发送模式选择，0：整包发送；1：字节发送
+pon_tx_th	10	I	PON字节发送模式的发送水线
+ethx_tx_eop	1	O	发送给GE MAC的报文eop指示，用于发送统计
+pie_tx_eop	4	O	发送给PIE的报文eop指示，用于发送统计
+prbs_tx_eop	1	O	发送给PRBS的报文eop指示，用于发送统计
+pon_tx_eop	16	O	发送给PON MAC的报文eop指示，用于发送统计
+pie_drop_cnt_inc	1	O	错误出通道号丢弃的报文统计
+oth_txff_afull_th0	5	I	OTH TXBUF 抗突发FIFO将满水线1。
+EFB 切片使用。
+oth_txff_afull_th1	5	I	OTH TXBUF 抗突发FIFO将满水线1。
+IFB 切片使用
+ethx_txb_baseaddr	6	I	GEx 的TXBUF基址
+ethx_txb_depth	8	I	GEx 的TXBUF深度
+pie_txb_baseaddr	6	I	PIE 的TXBUF基址
+prbs_txb_baseaddr	6	I	PRBS 的TXBUF基址
+prbs_txb_depth	8	I	PRNS 的TXBUF深度
+oth_txbuf_rw_mode	2	I	OTH TXBUF 读写模式配置寄存器。                                                                                                                                                                                                          2'b00：奇偶读写模式（RWRWRW）；
+2'b01：保留；
+2'b10：保留；
+2'b11：读优先模式。
+ethx_flush_freq	2	I	ETHx端口flush频率配置。
+2'b00：连续抽包；
+2'b01：每隔(10/f*1000)ns抽包一次；
+2'b10：每隔(16/f*1000)ns抽包一次；
+2'b11：每隔(32/f*1000)ns抽包一次。
+f为模块工作时钟频率。
+ethx_flush_en	1	I	ETHx端口flush模式配置，Hi5651使用，Hi5630不使用。
+0：正常发包模式；
+1：flush模式。
+ethx_flush_sta	32	O	ETHx口flush丢包个数统计。
+eth_sch_mode	1	I	ETH端口调度模式配置
+EPS_DIO  DEBUG寄存器
+ethx_itf_state	32	O	ETHx 口发送状态
+pie_itf_state	32	O	PIE 口发送状态
+pie_itf_state1	32	O	PIE 口发送状态1
+prbs_itf_state	32	O	PRBS 口发送状态
+pon_itf_state	32	O	PON 口发送状态
+ethx_ff_uf_set	1	O	ETHx_FIFO下溢
+ethx_ff_of_set	1	O	ETHx_FIFO下溢
+pie_ff_uf_set	1	O	PIE_FIFO下溢
+pie_ff_of_set	1	O	PIE_FIFO下溢
+prbs_ff_uf_set	1	O	PRBS_FIFO下溢
+prbs_ff_of_set	1	O	PRBS_FIFO下溢
+pon_ff_uf_set	1	O	PON_FIFO下溢
+pon_ff_of_set	1	O	PON_FIFO下溢
+oth_ff_uf_set	1	O	OTH_TX_FIFO下溢
+oth_ff_of_set	1	O	OTH_TX_FIFO下溢
+port_enq_cnt0	32	O	[31:16]：PRBS入队统计
+[15:0]： PIE入队统计。
+port_enq_cnt1	32	O	[31:16]：ETH1入队统计
+[15:0]： ETH0入队统计。
+port_enq_cnt2	32	O	[31:16]：ETH3入队统计
+[15:0]： ETH2入队统计。
+port_enq_cnt3	32	O	[31:16]：ETH5入队统计
+[15:0]： ETH4入队统计。
+port_enq_cnt4	32	O	[31:16]：CID1入队统计
+[15:0]： CID0入队统计。
+port_enq_cnt5	32	O	[31:16]：CID3入队统计
+[15:0]： CID2入队统计。
+port_enq_cnt6	32	O	[31:16]：CID5入队统计
+[15:0]： CID4入队统计。
+port_enq_cnt7	32	O	[31:16]：CID7入队统计
+[15:0]： CID6入队统计。
+port_enq_cnt8	32	O	[31:16]：CID9入队统计
+[15:0]： CID8入队统计。
+port_enq_cnt9	32	O	[31:16]：CID11入队统计
+[15:0]： CID10入队统计。
+port_enq_cnt10	32	O	[31:16]：CID13入队统计
+[15:0]： CID12入队统计。
+port_enq_cnt11	32	O	[31:16]：CID15入队统计
+[15:0]： CID14入队统计。
+oth_prerd_err_set	1	O	oth_txbuf 抗突发FIFO预读错误置位寄存器
+
+TX_ITF框图
+负责管理各接口模块所需的缓存，按奇偶时隙响应各接口模块的读写请求；写请求不会产生冲突，固定在奇时隙响应；在偶时隙按权重响应各接口模块的读请求。
+TxBuffer分成3个端口组： PON，OTH（6GE+PIE+PRBS+WOE），每个端口组用独立128bit SPRAM作为发送缓存；
+PON口TXBUF的大小为：96KB，RAM采用多队列链表管理；
+OTH组TXBUF大小为：3K*6+4*1K+2K+3K=27KB，多FIFO控制器管理；
+为解决EPS 18G的突发瓶颈，3块SPRAM前面使用一块512Byte 来吸收MERGE的突发；
+XPON_TXBUF：该模块实现报文的发送；接收MERGE发送过来的数据经过抗突发XPON_TXFIFO后根据端口号存入TX_BUF中不同的位置，当接口模块有读请求时，从TX_BUF中取出数据发送到各个接口MAC中。
+OTH_TXBUF：该模块实现报文的发送；接收MERGE发送过来的数据经过抗突发OTH_TXFIFO后根据端口号存入TX_BUF中不同的位置，当接口模块有读请求时，从TX_BUF中取出数据发送到各个接口MAC中。
+LP_CTRL：低功耗模块，当EQM-EPS没有报文处理时，送出1bit信号给DP_TOP用于动态调频（详细处理见3.4.5.4.8节）。
+
+设计实现
+3.4.5.4.1	OTH_TXFIFO
+OTH_TXFIFO为抗突发FIFO，用深度32，位宽135bit的STP RAM实现，每行存储报文的128bit报文数据，高4bit为发送端口号，其他3bit为报文的sop和eop信息。
+高4bit写通道ID信息：
+0-5： ETH0...5；
+6-9： PIE0...:PIE3 ；
+10 ： PRBS；
+11 ： WOE。
+OTH_TXFIFO的[130：128]的3bit详细信息如下表所示：
+表25 TX_BUF高3bit指示表
+Bit[130:128]	Description
+3’b000	表示data[127:0]为正常数据
+3’b001	表示data[127:0]为SOP
+3’b010	表示data[127:0]为报文头的EOP,有无效数据，data[3:0]指示有效数据的字节数
+3’b011	PRBS口pli报文：表示data[127:0]为报文头的SOP和EOP在同一拍，且有无效数据，data[3:0]指示有效数据的字节数
+3’b100	表示data[127:0]为报文的EOP,且没有无效数据
+3’b101	表示data[127:0]为报文的EOP,有无效数据，data[3:0]指示有效数据的字节数
+3’b110	表示data[127:0]为报文头的SOP和EOP在同一拍，且有无效数据，data[3:0]指示有效数据的字节数
+3’b111	PRBS口pli报文：表示data[127:0]为SOP
+
+3.4.5.4.2	TX_BUF
+TxBuffer分成1个端口组：OTH（6*GE+4*PIE+PRBS+WOE），端口组用独立128bit+3bit SPRAM作为发送缓存；
+OTH组TXBUF大小为：6*3K+4*1K+2K+3K=27KB，RAM采用多队列链表管理，读写奇偶错开；
+TX_BUF出口挤气泡流程：
+FIFO中的数据存储格式如下图所示：第1、2行为报文head；第3行为报文body。
+第一种情况（第二行1B数据）：
+
+1)读出第1行数据， 128bit有效，无气泡，直接并串转换成8拍的16bit数据送出;
+2)读出第2行数据， 8bit有效，有气泡，读出该行数据，并寄存该8bit数据;
+3)读出第3行数据， 128bit有效，无气泡，跟第二行读出的8bit数据拼成8拍的16bit数据送出，并寄存剩余的8bit数据。
+第二种情况(第二行3B/5B/7B数据)：
+
+1)读出第1行数据，128bit有效，无气泡，直接并串转换成8拍的16bit数据送出；
+2)读出第2行数据，3Byte有效，有气泡，读出该行数据，送出一拍到mac,并寄存剩下的8bit数据；
+3)读出第3行数据，128bit有效，无气泡，跟第二行读出的寄存下来的8bit数据拼成8拍的16bit数据送出，并寄存剩余的8bit数据。
+
+第三种情况（第二行2B/4B/6B/8B数据）：
+
+1)读出第1行数据，128bit有效，无气泡，直接并串转换成8拍的16bit数据送出;
+2)读出第2行数据，4BYTE有效，有气泡，读出该行数据，送出2拍数据到mac，无剩余数据寄存;
+3)读出第3行数据，128bit有效，无气泡，直接将8拍16bit数据送出。
+
+3.4.5.4.3	TXBUF链表设计
+TXBUF采用链表结构，总缓存是96K。因为82H支持16个TCONT，平均每个TCONT是6K；同时支持8个TCONT的jumbo帧，此时每个TCONT是12K，所以需要将TXBUF的反压水线配为12K，通过链表的方式，使能每个TCONT可以抢占到12K的缓存。
+注：采用链表结构可灵活配置为9个TCONT支持jumbo帧（每个TCONT对应10K），或者8个TCONT是jumbo帧（每个TCONT对应9K），同时8个TCONT是normal帧（每个TCONT对应3K）。
+TXBUF反压水线是为了配置每个TCONT对应的TXBUF大小，同时保证调度回来的数据不会出现TXBUF写溢出。每个TCONT的水线可以独立配置。
+以8行为一个CELL，96K对应6144行，共768个CELL，平均每个TCONT对应384行，共48个CELL。
+最恶劣的情况下，返回数据的最长行数是17，因为EFB对应的CELL是16行，如果对应的数据是EOP且需要加上CRC则会是17行。如果同时读出了7行，第8行还未读出时，不能释放CELL，这个时候能用的行数是384-17-7=360行，预留1行的空间，所以反压水线默认值是359。
+
+3.4.5.4.4	GE_IF(GE接口模块)
+主要功能：
+	每个GE通道FIFO深度为3KB，采用128bit的单口RAM实现；RAM由MNG模块统一管理；
+	FIFO的发送水线可配置，默认整包发送模式；
+	FIFO读取条件由发送水线和EOP决定；
+	在通道FIFO出口完成挤气泡动作，每个通道出口保存128bit + 8bit的接口数据；
+	各个通道间采用轮询操作；
+	GE_MAC给EPS的REQ拉低后最多会写2拍数据（32Byte）；
+	支持flush功能：
+CPU可将任意ETH接口配置为flush模式，在该模式下将缓存中的数据包抽空，抽出的数据包直接丢弃而不送往ge_mac模块。
+当CPU配置为flush模式，ge_mac模块不会再产生请求信号，即EPS被ge_mac反压，缓存中的报文无法读出，此时在模块内部按照一定的频率产生请求信号读取TxBuffer中的数据（产生请求信号的频率可配置），同时将EPS到ge_mac的写信号屏蔽，读出的数据直接丢弃，不写入ge_mac模块。并对flush丢弃的数
+
+3.4.5.4.5	xPON_IF(EPS_PON接口模块)
+主要功能：
+	每个通道深度为6KB字节（普通16TCONT模式），采用链表共享TXBUF实现方式；通道FIFO有数据即可发送，在SOP发送帧控制信息，但该信息由EPS填充；
+	通道间采用SP+RR调度，以16字节的粒度调度，所有通道共享128bit暂存数据，每个通道单独保存8bit待拼接的数据；
+	16个通道共用一组信号线；
+	GPON和XGPON模式下计算CRC32，填充到帧尾发给EPS_PON；支持CRC32插错，当配置差错使能时，将CRC取反再输出。
+	PON_EPS_REQ信号拉低之后同一TCONT最多会写4拍数据（64Byte）；
+
+3.4.5.4.6	PIE_IF(PIE接口模块)
+主要功能：
+	支持4个单通道的数据FIFO；
+	每个通道FIFO深度为1KB，采用128bit的单口RAM实现；RAM由MNG模块统一管理；
+	在通道FIFO出口完成挤气泡动作，通道出口保存128bit + 8*8bit的接口数据；
+	PIE给EPS的REQ拉低后最多会写2拍数据（32Byte）。
+MERGE与PIE_IF接口需要增加1拍帧头数据如下：
+Bit	Name	Description
+130:128 =3’b001	SOP indicator	SOP指示
+127:126	PIE CHID	PIE逻辑通道号
+
+PIE发送时序图
+在原来的PIE_ITF的两级流水中，在第一级流水采用握手操作，从pie_mng_rd_req到get信号为一次握手，get信号之后进入第二级流水。因此第一级流水中最快6拍才能读取一次TX_BUF,第二级流水处理发送数据需要0~8拍。所以最快6拍处理一次数据，最快才能达到3.5Gbps
+
+修改方案设计思想
+设计思想：通过FIFO分割两级级流水的操作，第一级流水不再采用握手的形式，而采用反压的形式，只要FIFO非将满就可以就行第一级流水，只要FIFO非空就可以就行第二级流水。
+第一级流水：根据FIFO的非将满读取TX_BUF，将读取的数据整理成发送需要的数据，处理PIE反压，丢弃错误出端口报文；最快2拍发起一次读请求；
+第二级流水：根据FIFO非空且前一个数据发送完毕来读取FIFO的数据，发起发送请求，将FIFO的数据读取并发送出去；1~3拍（3拍极少）将一行的FIFO数据发送出去。
+性能：理想情况下，每两拍处理128bit数据，可以达到10.6Gbps。
+
+第一级流水
+在第一级流水中，理想情况下，可以每两拍读取一次TX_BUF，每两拍将其写入到FIFO中，每次发起读取TX_BUF请求的条件是：相应TX_BUF非空，PIE_FIFO中没有将满。某一个虚端口的TX_BUF被请求读取的条件是：对应报文的逻辑通道无反压，且轮询调度到该虚端口。
+数据处理流程：在获取TX_BUF的读数据后，若是sop信息，则将需要的信息寄存下来；若是报文内容，则需要进行挤气泡，将数据整理成64bit形式，整理出相应的sop、eop、mod、chid、data_len、wdata等信息并将其写入到PIE_FIFO中。
+PIE反压处理：在读到PIE某虚拟端口报文的sop后判断相应的逻辑通道是否有反压信号，如有反压信号，则不再读取该虚拟端口；若读到的多个虚拟端口的报文sop后对应的逻辑通道都没有反压信号，轮询调度出一个虚拟端口，一直读取该虚拟端口这个报文的内容直到eop后再重新轮询。
+错误出端口报文丢弃处理：若读到某报文的sop后，得知该报文为drop型报文，该报文不写入PIE_FIFO中，PIE反压不会影响丢弃报文的处理。
+第二级流水
+在第二级流水中，若PIE_FIFO非空，并且前一个数据发送完成，就开始读取PIE_FIFO，读取PIE_FIFO后发起写请求pie_wr_req，当写请求信号与PIE发送过来的pie_eps_req同时有效的情况下产生pie_wr信号，pie_wr完成后就可以发起下一次读FIFO；pie_wr寄存一拍后发送出去。
+
+3.4.5.4.7	PRBS_IF（PRBS接口模块）
+主要功能：
+	支持1个单通道的数据FIFO；
+	PRBS给EPS的REQ拉低后最多会写2拍数据（32Byte）；
+	每个通道FIFO深度为1KB，采用128bit的单口RAM实现；RAM由MNG模块统一管理；
+	在通道FIFO出口完成挤气泡动作，通道出口保存128bit + 8bit的接口数据；
+
+3.4.5.4.8	WOE_IF（WOE接口模块）
+主要功能：
+	支持1个单通道的数据FIFO；
+	PRBS给EPS的REQ拉低后最多会写2拍数据（32Byte）；
+	每个通道FIFO深度为1KB，采用128bit的单口RAM实现；RAM由MNG模块统一管理；
+	在通道FIFO出口完成挤气泡动作，通道出口保存128bit + 8bit的接口数据；
+
+3.4.5.4.9	LP_CTRL（动态调频）
+	动态调频
+EPS与EQM配合完成各端口待发送报文数的统计，实现动态调频功能。需要做以下端口或逻辑通道的报文统计：
+1）ETH按端口统计，共6个计数器；
+2）PIE按端口统计，共1个计数器；
+3）PRBS按端口统计，共1个计数器；
+4）WOE按端口统计，共1个计数器；
+5）PON按一个物理通道统计，共1个计数器。
+
+统计方法：EQM入队时，相应计数器加1；在TX_BUFF送走一个报文后，相应计数器减1；
+提供16bit RO型状态寄存器，指示16个TCONT通路上是否存在报文的实时状态；
+提供8bit RO型状态寄存器，指示其它8个通路上是否存在报文的实时状态；
+当所有统计计数器都为0时，送出1bit指示信号给DP顶层。
+EPS累加有待发送报文端口的权重，与配置的三级阈值比较，送出比较结果给CRG，CRG根
+据结果动态调整工作频率。如下图所示：
+
+如上图所示，LP_CTRL模块根据QM入队指示脉冲进行报文个数统计，当报文的EOP从TX_BUF发出，相应通道报文统计计数器减1，当QM 入队指示脉冲到来时相应通道的计算器加1。通过判断每个通道的报文计数器是否为>0来进行总权重的计算，报文统计计数器为0的通道不参与总权重的计算。总权重与配置的三级门限进行比较，比较结果通过两个bit发给CRG来申请不同的频率。
+总权重的计算：
+当fe0_cnt>0时，(fe0_cnt>0) =1，fe0_cnt=0时，(fe0_cnt>0) =0；
+Total_Wgt_Cnt = fe0_wgt×(fe0_cnt>0) + fe1_wgt×(fe0_cnt>0)+ ……+pie_wgt×(pie_cnt>0)
+表26 DP动态调频端口参考权重
+端口	IPS模块权重	EPS模块权重
+10G PON	10	10
+GPON/EPON（1G）	1	1
+NNI_GE（1Gbps/2.5Gbps）	1/6	1/6
+GE 0~3	1	1
+GE 4（1Gbps/2.5Gbps）	1/6	1/6
+PIE（无WiFi/带WiFi）	1/6	1/6
+WOE	6	6
+PRBS	6	6
+
+表27 SD5182H DP动态调频等级配置
+lp_st[1:0]	频率等级	阈值	频率MHz	分频系数	典型场景
+0	0	0	62.5	4/16	空闲状态
+1	1	>=1	125	8/16	1G PON上下行对发
+2	2	>=4	187.5	12/16	2.5Gbps、WIFI等
+3	3	>=6	250	16/16	10G PON
+
+说明：
+1.	GE接口16-bit，只要有一个GE口时，频率至少62.5MHz；工作在2.5Gbps模式时，至少156.25MHz；
+2.	PRBS发包时，流量的控制以时钟周期为单位，动态调频时存在流量控制不准的情况，所以固定设置最高频，或者流量最大并通过IPS的CAR反压来实现速率控制；
+3.	PIE口的流量，跑WiFi业务时，需要2.84Gbps（至少100MHz）甚至更高，所以设置最高频166MHz（对应PIE接口物理带宽166MHz*16-bit=2.656Gbps）；
+4.	频点0：主要关注是从IDLE状态变为最大流量时，IPS_PON/IPS及MAC的FIFO能否扛住升频期间的流量突发，按1/4分频系数考虑为62.5MHz，可以考虑更低的46.875MHz甚至31.25MHz。
+5.	频点1：考虑工作在简单的1G PON的接口场景下，类似于SD5116H芯片DP工作时钟125MHz；
+6.	频点3：有10G PON对称模式时，为了保证上行的10Gbps性能，必须工作在最高频250MHz；
+7.	频点2：作为中间频率，SD5182H上暂时没有规划精确的场景；
+8.	DP理论上最大性能要求：
+NNI（10G）+5*GE+PIE+PRBS+WIFI=10+5*1+0.5+1+3=19.5Gbps
+实际SD5182H性能要求：14Gbps左右。
+
+	PON口低功耗
+EPS根据PON口的入队、出队进行队列内报文统计，当PON口队列无报文的时间超过配置的阈值后进入低功耗（IPS和EPS分别提供进入低功耗中断，当两者都有中断时才进入低功耗）；处于低功耗时，当EQM入队报文超过配置的阈值时退出低功耗。
+•	进入低功耗检测
+检测条件
+当进入低功耗检测使能时，逻辑统计EPS模块PON口队列（EQM入队加1、EPS输出减1）为空的时间，当无报文的时间达到配置阈值，则报进入低功耗中断；
+阈值配置
+PON_ENLP_TH，单位1us，默认值1s。
+EN_LP_ENABLE，进入低功耗检测使能，默认关闭硬件逻辑的进入低功耗检测，由软件自行检测。
+•	退出低功耗检测
+检测条件
+软件配置退出低功耗检测使能，逻辑根据配置开始两种模式的退出检测，维护两个计数器：
+1）EPS每收到一个PON口报文，计数加1（最大值饱和），每发送一个报文减1（最小为0）；
+2）EPS每收到一个PON口报文，计数加1（最大值饱和），每到一个周期则减固定的令牌（最小值为0）；
+只要有一个计数器大于等于各自的配置阈值时，则EPS上报退出低功耗中断；同时记录2-bit的触发状态，供软件查询是哪种检测方式触发了退出低功耗中断。
+上报中断之后计数器继续加减，软件清除退出低功耗检测使能ex_lp_enable后，计数器清零，在配置使能ex_lp_enable为1时，开始下一次计数检测。
+
+配置
+PON_EXLP_TH，报文个数。
+
+表28 退出低功耗检测使能以及退出检测模式和状态
+bits	成员名称	复位值	成员说明
+31:6	reserved	0	保留位
+5	ex_lp_credit_st	0	减令牌的方式触发退出低功耗状态
+4	ex_lp_pkt_st	0	减报文的方式触发退出低功耗状态
+3	ex_lp_credit_mode	0	退出低功耗检测模式：减令牌方式使能
+2	ex_lp_pkt_mode	1	退出低功耗检测模式：减报文方式使能
+1	ex_lp_enable	0	退出低功耗检测使能配置
+0	en_lp_enable	0	进入低功耗检测使能配置
+
+表29 定期减令牌的配置
+bits	成员名称	复位值	成员说明
+31:24	ex_lp_credit	0	退出低功耗每周期所减的令牌，默认值0
+23:0	ex_lp_period	0xF4240	退出低功耗减令牌的周期，单位是us，默认值1s
+
+表30 两套退出低功耗阈值和有流量的阈值配置
+bits	成员名称	复位值	成员说明
+63:48	pon_flux_th2	0	令牌模式有流量的阈值
+47:32	pon_lp_off_th2	0	令牌模式退出低功耗的阈值
+31:16	pon_flux_th	0	报文模式有流量的阈值
+15:0	pon_lp_off_th	0	报文模式退出低功耗的阈值
+•	有无流量状态检测
+
+检测条件
+统计PON口队列中的报文数目，当报文数目达到配置阈值时，则报有流量状态；当报进入低功耗中断时，则报无流量状态。
+跟退出低功耗检测类似，逻辑提供两种有无流量状态检测（报文模式和令牌模式）和两个流量状态。
+当逻辑检测到进入低功耗时，计数清零；
+当软件配置退出低功耗检测使能时，计数清零。
+
+
+
+
