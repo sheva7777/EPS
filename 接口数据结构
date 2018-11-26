@@ -1,0 +1,50 @@
+接口数据结构
+EQM发送的PRE_FD信息
+EQM固定每8拍送一个FD给EPS（也可以不送），前五拍发送FD，后三拍空闲；FD数据总线为16位宽，分5拍传输一个FD的全部信息：
+	15	14	13	12	11	10	9	8	7	6	5	4	3	2	1	0
+  0	RSVD	UWGT[2:0]	PIE_PRI[3:0]	ECHID[7:0]
+  1	RSVD[6:0]	QID[8:0]
+  2	RSVD	AVER_LEN[14:0]
+  3	HCAP[15:0]
+  4	RSVD	SSEL[5:0]	MC	CP_LEN[7:0]
+
+UWGT[2:0]：报文消耗各级调度器DRR共享权重指示，EPS透传反馈给EQM； 
+PIE_PRI[3:0]：PIE优先级；
+ECHID[7:0]：出端口通道号；
+QID[8:0]：包的队列ID；
+AVER_LEN[14:0]：包的平均帧长；
+HCAP[14:0]：Head Cell Address Pointer，Head Cell首地址；
+SSEL[5:0]：报文调度器调度算法，EPS透传反馈给EQM；
+MC：0表示单播，1表示组播；
+CP_LEN[7:0]：对于单播报文CP_LEN[7:0]表示报文长度，单位是16Byte；
+对于组播报文，片内缓存时，CP_LEN[4:0]表示报文HEAD长度，单位是16Byte，可以表示到512Byte。CP_LEN[7:5]无效。
+对于组播报文，片外缓存时，CP_LEN[7:4]表示报文HEAD长度，单位是32Byte，可以表示到512Byte。CP_LEN[3:0]表示报文BODY长度，单位是32Byte，可以表示到512Byte。
+注：报文HEAD长度最大是319Byte。
+{HL[2:0],BL[4:0]}：对于单播报文，8bit表示报文长度，单位是16Byte；对于组播报文，HL[2:0]表示HEAD长度，BL[4:0]表示BODY长度，单位是32Byte。
+
+EQM发送的ECH_ID编码信息
+7	6:5	4:3	2	1	0	Description	PSCH
+1	00	00000~01111	PON CHANNEL	3
+1	01	00000	WOE	1
+0	00	01	000	RSV	-
+0	00	10	00	0~1	LOOPBACK0-1	0
+0	00	11	000	PRBS	1
+0	01	00~11	000	PIE channel	1
+0	1000~1101	000	ETH 0-5	2
+0	1110	000	XGE(EMU)	4
+ECHID编码表
+注：NNI_GE/NNI_XGE固定映射在7’b1000_0000的位置，与TCONT0复用。
+2.3.4.3	EPS_PON接口数据格式
+EPS与EPS_PON的接口位宽是128bit，EPS在帧头添加4字节的控制信息，SOP为高时有效，数据结构如下：
+
+其他模式（GPON/xEPON所有模式）:
+Bit	Field	width	Description
+127:126	reserved	2	保留
+125:114 	gemport_id	12	GPON：Gemport ID；xEPON：reserved
+113:100	pon_flen	14	帧长，不包含帧头的4字节控制信息（EPON/XG-EPON不含FCS, GPON/XG-GPON会包含FCS的长度）
+99	scr	1	GPON模式scr（GPON使用）
+98:96	qid_pri	3	队列优先级（EPON使用）
+95:89	ecc_code	7	127:96 bit帧头信息ECC校验码
+88:0	reserved	89	无实际有效数据，DMAC 在SOP的下一拍。
+说明：ecc_code的处理方式，EPS_PON只在NGPON 2.5G/10G两种模式下使用带外传输eps_pon_ecc_code[6:0]接口信号（sop下有效），其他模式使用帧头信息带内ECC的方式。
+注意：GPON/XG-GPON/TWDM_PON模式下，会在帧尾添加4字节的以太帧FCS，EPON/XG-EPON模式则不添加。
