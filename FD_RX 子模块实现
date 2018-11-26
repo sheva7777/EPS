@@ -380,5 +380,52 @@ EPS将重组后的PRE_FD（包含echid、qid、len等简单信息）信息写到
 将更新后的PIE队列号回写到FD中，给到DSCH模块。
 根据FD信息中的TraceCounter信息进行三种统计。Counter ID有2bit，为0表示没命中，另外三种数值分别进行统计，仅统计报文个数。
 
+EQM Shaping帧长信息反馈
+FD_RX从DMUX模块获得FD后，将获得报文的长度减去报文的平均帧长的值通过REQ-ACK方式反馈给EQM。
+补偿帧长度要减去16Byte的报文FD长度、EXT_FD长度；对于PIE报文，PIE拓展头长度可配置，要根据配置值减去相应的长度。
+Shaping补偿的报文长度是指报文净荷从DMAC开始的长度，如下所示：
+PIE: shap_len = frm_len -16（报文FD长度）- 16（扩展FD长度）- 8/16/24/32（PIE FD，默认8B）；
+PRBS、WOE: shap_len = frm_len -16（报文FD长度）- 16（扩展FD长度）- 8（PRBS FD）；
+OTH: shap_len = frm_len -16（报文FD长度）- 16（扩展FD长度）。
 
+EQM二次入队
+EPS根据ECHID=loopback 来判断二次入队的报文。
+报文给EPS之后，FD_RX从DMUX模块获得FD后将FD环回给EQM进行二次入队，从报文FD中提取的信息如3.4.1.2.3所示。
+
+EQM队列资源释放
+FD_RX从DMUX模块获得FD后，将FD的部分信息通过REQ-ACK方式反馈给EQM，从报文FD需要提取的信息如3.4.1.2.4所示。
+
+PIE逻辑通道号映射
+EPS在PIE端口支持8个逻辑通道，对应PIE的8个接收队列。PIE的8个队列可以配置成最多4个虚拟端口，每个端口可支持多个优先级。EQM送出的PIE端口报文需要在EPS映射到逻辑通道。
+EPS支持16条规则匹配映射到PIE的8个队列，实现使用寄存器配置方式，具体内容如下：
+规则条目：16；
+匹配内容：igr[31:0](bitmap)+rxhash[1:0]+pie_ech[1:0]+pie_sq[3:0]+gro_id[3:0]；
+igr为源端口，rxhash为五元组哈希值，pie_ech为pie的虚拟端口号，pie_sq为pie的优先级，gro_id为GRO重组报文流ID。
+匹配规则：igr固定匹配，其它4项可选匹配，其中gro_id[3:0]还需要前级模块的gro_id_en使能匹配域，若某条规则中gro_id需要参与匹配，即寄存器中gro_id_vld为1，但是gro_id_en无效，则本条规则匹配失败。gro_id_en无效表示报文没有gro_id[3:0]字段。igr是bitmap的形式，可以同时配多个bit有效，只要报文的igr[4:0]字段转换成bitmap后与其中1bit对应上，则igr域匹配成功。
+匹配结果：所有规则遍历匹配，同时命中多条规则，取匹配优先级最高的作为命中结果；若命中优先级相同，取序号最小的作为命中结果；没有命中规则时，取默认pie_chid；
+规则属性：设置规则有效位，无效规则不参与匹配；
+匹配动作：指定报文的pie_chid[2:0]；
+其中igr+rxhash[1:0]+gro_id[3:0]+gro_id_en信息来自报文FD，pie_ech[1:0]+pie_sq[3:0]信息来自EQM FD。
+表11 PIE队列映射寄存器配置0
+成员名	范围	属性	描述
+pie_rule_vld	31	RW	PIE队列映射规则有效位。
+pie_chid	30:28	RW	PIE队列映射ID（匹配结果）。
+reserved	27:24	RO	保留。
+pie_rule_pri	23:20	RW	匹配优先级。
+gro_id_vld	19	RW	GRO重组报文流ID有效位。
+reserved	18:16	RO	保留。
+gro_id	15:12	RW	GRO重组报文流ID。
+rxhash_vld	11	RW	五元组RXHASH值有效位。
+reserved	10	RO	保留。
+rxhash	9:8	RW	五元组RXHASH值。
+pie_ech_vld	7	RW	PIE虚拟端口有效位。
+pie_ech	6:5	RW	PIE虚拟端口。
+pie_sq_vld	4	RW	PIE报文优先级有效位。
+pie_sq	3:0	RW	PIE报文优先级。
+
+表12 PIE队列映射寄存器配置1
+成员名	范围	属性	描述
+igr	31:0	RW	报文源端口（bitmap）。
+
+以下图为例，PIE被划分为2个虚拟端口，虚拟端口0占用队列4~7，虚拟端口1占用队列2~3。EPS可以根据预读的FD中的rxhash+EQM通用调度器的CHID+输入端编号信息把EQM队列一对一或多对一映射到PIE队列。
 
