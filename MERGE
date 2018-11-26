@@ -1,0 +1,197 @@
+3.4.4.1	模块介绍
+MERGE从BI_FIFO读出最先发起读操作的块信息，根据块的报文存储地址、长度等信息从IFB/EFB的RD_BUF中读取相应的数据块；将数据块写入TX_BUF，MERGE模块为每个通道保存链头CELL地址、链尾CELL地址，统计CELL数量，在尾CELL数据读出后，把完成读取的报文地址向FAM释放；需要注意的是单播报文只释放一次，组播报文会Head和Body释放两次，并在Body释放时给出MCI指示。
+由于PIE需要在SOP时发送PKT_LEN，则当从BI_FIFO读出的块信息是PIE或PRBS需要先向相应的TXBUF写入一拍PKT_LEN数据，然后再从MEMP/DMC的RD_BUF中读出数据写入TXBUF。
+3.4.4.2	接口信号描述
+表20 MERGE接口信号表
+Name	Width	Direction	Description
+TOP
+clk_sys_dp	1	I	DP时钟信号。
+clk_dp_2x	1	I	DP时钟的二倍频信号
+rst_dp_n	1	I	DP逻辑复位信号，低电平有效。
+ctrl_bus[9:0]	10	I	CTRL_BUS
+dft_ctrl_bus[4:0]	5	I	DFT_CTRL_BUS
+gpon_mode	1	I	nni_mode等于0，5，13
+pie_ext_info_len	2	I	PIE info长度
+efb_cell_size[1:0]	2	I	DDR CELL大小  
+0: 256Byte  1: 512Byte  2: 1KByte  3: 2KByte
+sync_eps	1	O	EPS子模块同步指示信号
+clr_statistic	1	I	统计清零信号。
+FAM ITF
+eps_fam_rls_req	1	O	EPS给FAM的地址释放请求
+eps_fam_rls_len	7	O	释放cell个数
+eps_fam_rls_mc	1	O	释放组播指示
+eps_fam_rls_mc_id	11	O	释放组播ID
+eps_fam_rls_dgp	2	O	释放目的端口组
+eps_fam_rls_hptr	16	O	释放组播报文头或者单播报文的第一个cell地址
+eps_fam_rls_tptr	16	O	释放组播报文头或者单播报文的最后一个cell地址
+eps_fam_rls_sport	5	O	释放源端口
+eps_fam_rls_efb	1	O	EPS释放的组播body在EFB中指示，1表示释放的组播叶子在EFB中，0表示释放的组播叶子在IFB中。
+fam_eps_rls_ack	1	I	FAM释放地址的响应
+EQM ITF
+eps_eqm_ifb_stat_vld	1	O	IFB缓存统计有效指示信号，1有效，指示EPS已经从IFB读出了一个完整的报文（EOP）；
+eps_eqm_ifb_stat_egr[4:0]	5	O	出端口；
+eps_eqm_ifb_stat_hlen[1:0]	2	O	报文head长度（单位为cell），给EQM统计PEB缓存使用；
+eps_eqm_ifb_stat_blen[6:0]	7	O	报文body长度（单位为cell），给EQM统计PEB缓存使用；
+eps_eqm_ifb_stat_mc	1	O	报文组播指示，1表示是组播报文；
+DSCH ITF
+biff_dsch_afull	2	O	BI_FIFO将满信号
+dsch_biff_wdata	85	I	发送给BI_FIFO的写数据
+dsch_biff_wen	1	I	发送给BI_FIFO的写使能
+dsch_biff_wid	1	I	发送给BI_FIFO的写ID
+dsch_biff_efb	1	I	BI_FIFO的EFB指示
+rls_chk_req	1	O	检查释放地址是否与查询地址冲突请求
+rls_chk_ccap	15	O	用于检查的地址
+rls_chk_ack	1	I	无冲突后的返回信号
+pon_rbuf_dec	1	O	pon rbuf读出数据指示
+oth_rbuf_dec	1	O	oth rbuf读出数据指示
+DMUX ITF
+pon_nm_rbuf_cnt	6	I	IFB报文PON R_BUF中数据个数，以128bit为单位
+oth_ifb_rbuf_cnt	6	I	IFB报文OTH R_BUF中数据个数，以128bit为单位
+merge_dmux_ifb_ren	1	O	IFB R_BUF的读使能
+merge_dmux_ifb_rid	1	O	IFB R_BUF的读ID；0：PON  1：OTH
+dmux_merge_ifb_rdata	128	I	IFB R_BUF输出的读数据
+pon_efb_rbuf_cnt	8	I	EFB报文G.HN R_BUF中数据个数，以128bit为单位
+oth_efb_rbuf_cnt	8	I	EFB报文OTH R_BUF中数据个数，以128bit为单位
+merge_dmux_efb_ren	1	O	EFB R_BUF的读使能
+merge_dmux_efb_rid	1	O	EFB R_BUF的读ID；0：PON  1：OTH
+dmux_merge_efb_rdata	128	I	EFB R_BUF输出的读数据
+biff_ram_wen	1	O	BI_FIFO的写使能
+biff_ram_ren	1	O	BI_FIFO的读使能
+biff_ram_addr	5	O	BI_FIFO的写地址
+biff_ram_wdata	85	O	BI_FIFO的写数据
+biff_ram_rdata	85	I	BI_FIFO的读数据
+TX_ITF ITF
+oth_merge_afull0	1	I	OTH_TXFIFO的IFB数据将满信号
+oth_merge_afull1	1	I	OTH_TXFIFO的EFB数据将满信号
+merge_oth_wr	1	O	TX_BUF的写使能
+merge_oth_wchid	4	O	写通道ID。
+0-5： ETH0...5；
+8  ： PIE0...11:PIE3 ；
+12 ： PRBS；
+13 ： GHN。
+merge_oth_wdata	131	O	TX_BUF的写数据
+pon_merge_afull0	1	I	PON_TXFIFO的IFB数据将满信号
+pon_merge_afull1	1	I	PON_TXFIFO的EFB数据将满信号
+merge_pon_wr	1	O	TX_BUF的写使能
+merge_pon_wchid	4	O	写通道ID。
+0-5： ETH0...5；
+8  ： PIE0...11:PIE3 ；
+12 ： PRBS；
+13 ： GHN。
+merge_pon_wdata	131	O	TX_BUF的写数据
+merge_xfi_wr	1	O	TX_BUF的写使能
+merge_xfi_wdata	131	O	TX_BUF的写数据
+EPS_DIO ITF
+wan_st_vld_0~14	1	I	统计有效标识
+wan_vlan_en_0~14	2	I	接口VLAN有效标识：
+0：不关注VLAN；
+1：匹配VLAN为配置VLAN的报文；
+2：匹配UNTAG报文；
+wan_vlan_0~14	12	I	接口VLAN(含路由和桥接接口)
+wan_port_0~14	4	I	物理端口
+wan_mac_en_0~14	1	I	WAN口匹配MAC有效标识：
+0：不关注mac；
+1：匹配mac。
+wan_mac_h16_0~14	16	I	WAN口配置MAC高16bit
+wan_mac_l32_0~14	32	I	WAN口配置MAC低32bit
+pon1_biff_afull_th	4	I	PON BIFF的将满水线
+pon1_efb_bp_en	1	I	PON BIFF的EFB命令反压使能
+pon1_efb_th	4	I	PON BIFF的EFB命令反压水线
+oth_biff_afull_th	4	I	OTH BIFF的将满水线
+oth_efb_bp_en	1	I	OTH BIFF的EFB命令反压使能
+oth_efb_th	4	I	OTH BIFF的EFB命令反压水线
+rls_ff_afull_th	3	I	释放FIFO将满水线
+merge_state0	32	O	MERGE状态0
+merge_state1	32	O	MERGE状态1
+err_rd_len_set	1	O	Brust长度错误置位
+biff_uf_set	1	O	BIFF下溢
+biff_of_set	1	O	BIFF上溢
+rls_ff_of_set	1	O	释放FIFO上溢
+rls_ff_uf_set	1	O	释放FIFO下溢
+eps_rls_pkt_cnt_inc	1	O	释放包个数统计
+
+3.4.4.3	数据结构
+3.4.4.3.1	EXT_FD
+表21 EXT_FD数据结构表
+MSB	LSB	Width	Field	Description
+71	0	72	reserved	保留。
+80	72	9	lm_smp_idx	LM采样索引，用于EPS进行出口LM采样。
+[8]：采样有效标识，高电平有效。
+[7:0]：采样索引。
+89	81	9	lm_cnt_idx0	LM统计索引0，用于EPS进行出口LM统计。
+[8]：统计有效标识，高电平有效。
+[7:0]：统计索引。
+98	90	9	lm_cnt_idx1	LM统计索引1，用于EPS进行出口LM统计。
+[8]：统计有效标识，高电平有效。
+[7:0]：统计索引。
+107	99	9	lm_cnt_idx2	LM统计索引2，用于EPS进行出口LM统计。
+[8]：统计有效标识，高电平有效。
+[7:0]：统计索引。
+115	108	8	lm_edit_offset	LM采样值编辑位置，以DMAC为起始点计算。
+127	116	12	reserved	保留。
+
+3.4.4.4	设计思想
+3.4.4.4.1	BI_FIFO设计
+该FIFO主要是缓存DSCH发送的命令信息，MERGE模块根据该命令信息从RD_BUF中读出相应的数据块然后送到对应通道TX_BUF中。该模块主要是一个11x46bit的FIFO，与FD_FIFO、INFO_RAM共享一块SPRAM实现。
+DSCH模块将切片读命令存入BI_FIFO中，MERGE模块根据轮询调度的方式将读命令从BI_FIFO中取出。
+有3个BI_FIFO，分别存储PON0、PON1端口读命令的BI_FIFO、存储OTH端口读命令的BI_FIFO；
+Merge模块是基于两级流水实现，第一级流水进行块命令的预读和RR调度（3拍）；第二级流水是根据切片信息从RD_BUF中读数据报文并发送到TXBUF；
+基于带宽效率考虑，流水尽量不能空转，由于EFB返回数据延时较大且可能存在不连续情况，设计中对3个大通道的BI_FIFO采取提前预读出来，根据BI_FIFO的预读信息和相应通道的队列状态（IFB、EFB的各3个读数据队列，需要整块数据返回才能参与调度）产生可以参与轮询的通道。
+3.4.4.4.2	流水设计
+Merge模块使用两级流水设计：
+第一级流水：
+1）	从BI_FIFO预读出Block_info，从中识别是否为组播报文，是否带有首个CELL地址（SOP指示），是否带有帧尾CELL地址（eop指示），并统计CELL个数，源端口，将这些释放链表需要的信息寄存到LL_INFO_REGG寄存器组中。当为组播报文（MCI标识）时，由于帧头和BODY释放的权重不一样，需要单独识别帧头链和帧尾链头尾CELL地址,单独统计帧头链和BODY链的CELL个数。
+2）	从Block_INFO中解析出当前的块大小，出口通道号，IFB/EFB指示，sop，eop，mod等信息，向下一级流水传递。
+3）	如果下一级模块处于空闲状态（已经完成上一切片的读取），就会获取本级流水准备好的信息，此时本级流水就可以读出一个新的Block_info进行解析，无需等待下一级流水完成处理再去读新的Block_info，即第二级流水在搬运数据的过程中，第一级流水可以预读出新的block_info开始新一轮的流水。当Bl_FIFO为空时，本级流水处于空闲状态。
+第二级流水：
+1）	如果TX_BUF无反压(不应该有反压，做检错)和RD_BUF中已经有数据(非空)，则根据块大小信息和EFB/IFB指示，从RD_BUF中读出块数据送到TX_BUF中，RD_BUF读接口为128bit，TX_BUF 写接口拼上SOP、EOP、MOD指示为131bit。
+2）	当帧尾或组播帧头尾的数据，需要根据释放链表信息寄存器组LL_INFO_REGG中获得链头、链尾、源端口、CELL个数、释放权重等信息，向FAM发出释放缓存链的申请。
+3）	当块数据全部从RD_BUF中搬到TX_BUF后，本级流水可以向上级流水获取新的Block_info 解析信息，开始新一轮的流水。
+3.4.4.4.3	缓存释放
+缓存的释放在第二级流水进行，组播报文的帧头链和BODY链进行单独释放，帧头链以最大权重32进行释放，Body链以权重1进行释放。单播报文时以整条链进行释放，释放权重为1。
+Merge需要统计帧内链的CELL个数，组播报文的帧头链和Body链需要独立统计，链释放时需要给FAM提供链的CELL个数和报文的源端口号，FAM将用于各个通道缓存统计。
+单播报文的缓存释放：单播报文在读取到帧的eop后释放，释放包括帧的头尾CELL地址和CELL个数；
+组播报文的缓存释放：组播报文在读取到报文HEAD的eop和BODY的eop后分别释放，HEAD释放包括HEAD的头尾CELL地址和CELL个数，BODY释放包括BODY的头尾CELL地址和CELL个数。
+3.4.4.4.4	IFB缓存统计指示
+如果报文是缓存在IFB，在缓存释放到eop时向EQM发起缓存统计的指示，输出egr[4:0]、hlen[1:0]、blen[7:0]、mc信息给EQM，hlen、blen的单位是cell，即160Byte。
+3.4.4.4.5	EXT_FD处理
+对于有扩展FD的报文，PKT_LEN需要减16byte；报文在写入Txbuf前需要将扩展FD信息剥离。
+根据FD中的EXT_FD标识判断FD后面一拍是否有扩展FD信息，对于没有扩展FD的报文，FD后面一拍开始为正常数据包内容，依次读出写入TxBuffer即可。对于有扩展FD的报文，FD后面一拍数据为扩展FD信息，从缓存中将扩展FD读出后，根据该描述信息中提供的OFC索引进行OFC报文统计，根据报文编辑索引对指定位置的报文进行编辑；但扩展FD不写入TxBuffer中，扩展FD后面一拍开始才是数据包内容(如果是PIE或PRBS则扩展FD之后不是DMAC，而是PIE/PRBS的FCB)，依次从缓存中读出写入TxBuffer中，处理流程如下：
+EXT_FD的数据结构见3.4.4.3.1。
+1731报文的统计表位宽为32bit，共支持256个统计项，对于统计有效标识为高电平的统计项，根据ext_fd中相应的统计索引作为地址，将统计表中的表项内容读出，加1后再写回该表项中，完成一次统计。一个报文可能会有多个统计项同时有效，需要依次进行统计。1731报文最多只有3个统计索引和1个编辑索引，在3个统计索引和1个编辑索引同时有效的情况下，共需四读三写7拍即可完成一个报文的统计，因此1731统计表选用一片单口RAM实现。
+1731报文编辑：
+对于ext_fd中采样有效标识为高电平的报文，需要进行报文编辑，将ext_fd中的采样索引作为地址，读出1731统计表中相应表项的内容，从报文的指定位置开始，用前面读出表项内容的32bit数据对报文进行改写。指定的改写位置从DMAC开始计算，偏移量为ext_fd中的LM采样编辑位置（lm_edit_offset）。（说明：lm_edit_offset从PSA给出的最大值是100字节，EPS对于PON和ETH口的lm_ebit_offset的最大处理能力是160(IFB)-32(fd)-4(offset)=124字节，对于PRBS口最大处理能力160(IFB)-32(fd)-8(prbs_fd)-4(offset)=116字节，对于PIE口最大处理能力160(IFB)-32(fd)-24(pie_fd)-4(offset)=100字节，可以满足LM的需求）。
+注：5182HV100项目的PIE口支持分片重组功能，即发往PIE口的报文，前面会带多32Byte。这种情况下不满足LM需求，所以LRO_EN有效时，不支持LM编辑，但RTL不做编辑，如果配置编辑，但编辑不了会给出告警。
+这里从1731统计表中读出的统计值是该报文被统计之前的值。
+对于1731统计表，只能进行CPU写清零，没有其他清零方式；统计满32bit后翻转，不饱和。
+LM统计如果出现两个或三个统计是同一个idx，按照代码读跟写的时间完全错开，读出来的都是加之前的值，2~4拍读出的数据是一样的，5~7拍将同样的数据加1后写入同样的地址，结果就相当于统计了1个。
+3.4.4.4.6	WAN口统计
+使用PORT(5bit)+VLAN(14bit)+SMAC (49bit)共15组配置寄存器，匹配后进行统计；EPS命中两个配置项后，可以同时进行两次统计。VLAN，SMAC可单独控制匹配使能，VLAN可匹配Untag报文，PORT固定匹配。
+每组统计的内容如下，每项统计位宽为84bit，包括报文字节和个数统计。统计表项深度为8*4=32。位宽为84bit。查表索引为｛配置索引，成员索引｝。字节统计时包括报文的CRC长度。
+表22 报文类型统计表
+成员索引	统计项	描述
+0	uc_cnt	单播MAC报文，包括个数和字节数
+1	mc_cnt	组播MAC报文，包括个数和字节数
+2	bc_cnt	广播MAC报文，包括个数和字节数
+3	RSV 	保留
+可配置PIE视频诊断报文不做WAN口统计；
+ETH端口1588报文不做WAN口统计；
+PRBS端口的环回报文不做WAN口统计；
+PIE端口1588报文不做WAN口统计；
+二次环回报文不做WAN口统计。
+异常报文不做WAN口统计。
+
+WAN口统计表
+成员名	范围	属性	描述
+frame_cnt_h	83:80	RW	报文个数统计，高4bit,即frame_cnt[35:32]。
+byte_cnt	79:32	RW	报文字节数统计。
+frame_cnt	31:0	RW	报文个数统计。
+
+超短包WAN口统计处理：如果HEAD是0Byte时（对EPS单个模块来说只有PIE或PRBS有这种可能），认为WAN口统计匹配失败。
+如果HEAD是小于16Byte时，比如长度等于8Byte时，SMAC只有两个字节，RTL还是按SMAC的起始位置取出6字节，其他4字节由MEMP/DMC发过来的随机数，这时候也按取出来的6字节去匹配，正常情况下不会匹配成功。
+报文字节数统计是各个端口剥离掉FD、EXT_FD，以及PIE的VAR_INFO、GRO_INFO、PRBS的VAR_INFO之后数据，再减去4字节的CRC。注：每个端口都要减去4字节CRC。
+如果有多个匹配上，最多可以统计两个。第二个idx是与第一个离得最近，且大于等一个。
+
+
+
+
