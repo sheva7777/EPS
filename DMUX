@@ -1,0 +1,175 @@
+3.4.3.1	模块介绍
+该模块主要是根据DSCH发出的IFB/EFB的读指示，产生MEMP/DMC命令FIFO接口信号，将读命令写入到MEMP/DMC的命令FIFO中，然后将从MEMP/DMC的数据FIFO中返回的数据进行串并转换，将其送到相应出端口的Txbuf上。
+3.4.3.2	接口信号描述
+表18 DMUX接口信号表
+Name	Width	Direction	Description
+TOP
+clk_sys_dp	1	I	DP时钟信号。
+clk_dp_2x	1	I	DP时钟的二倍频信号
+rst_dp_n	1	I	DP逻辑复位信号，低电平有效。
+ctrl_bus[9:0]	10	I	CTRL_BUS
+dft_ctrl_bus[4:0]	5	I	DFT_CTRL_BUS
+efb_cell_size[1:0]	2	I	DDR CELL大小  
+0: 256Byte  1: 512Byte  2: 1KByte  3: 2KByte
+eps_ecc_int	1	O	FD ECC校验1bit、2bit错误
+pon_pri_preempt_mode	1	I	0：普通模式，1：抢占模式。
+pon_pri_ mode_sync	1	O	同步后的抢占模式选择
+FD_RX ITF
+dmux_fdrx_efb_rdy	1	O	读FEB命令的ready信号
+efb_cmd_fd_wr	1	I	读EFB命令的写使能脉冲，高有效
+efb_cmd_fd_wdata	28	I	读EFB命令的相关数据
+efb_fdbuf_empty[2:0]	3	O	EFB给EPS的读返回数据请求信号；0：PON0_FD；1：PON1_FD；2：OTH_FD;
+efb_fdbuf_ren	1	I	EPS给EFB的读数据使能，高有效;
+efb_fdbuf_rid	2	I	EPS从EFB的读出的数据ID；0：PON0_FD；1：PON1_FD；2：OTH_FD;
+efb_fdbuf_rdata[127:0]	128	O	EPS从对EFB的读出的数据
+dmux_fdrx_fd_vld	1	I	DMUX模块给过来的FD有效标识
+dmux_fdrx_rd[127:0]	128	I	DMUX模块给过来的FD信息
+fdrx_dmux_afull[28:0]	29	O	FD FIFO将满信号
+fdff_ram_wen	1	I	FD_FIFO的写使能
+fdff_ram_ren	1	I	FD_FIFO的读使能
+fdff_ram_addr	8	I	FD_FIFO的写地址
+fdff_ram_wdata	59	I	FD_FIFO的写数据
+fdff_ram_rdata	59	O	FD_FIFO的读数据
+DSCH ITF
+dsch_dmux_cmd_wr	1	I	读切片命令的写使能
+dsch_dmux_cmd_info	28	I	读切片命令
+dmux_dsch_efb_rdy	1	O	EFB ready指示
+dmux_dsch_ifb_rfy	2	O	IFB ready 指示
+info_ram_wen	1	I	info_ram写使能
+info_ram_wdata	73	I	info_ram写数据
+info_ram_ren	1	I	info_ram读使能
+info_ram_rdata	73	O	info_ram返回的读数据
+info_ram_addr	4	I	info_ram的读写地址
+MERGE ITF
+pon_nm_rbuf_cnt	6	O	IFB报文PON R_BUF中数据个数，以128bit为单位
+oth_ifb_rbuf_cnt	6	O	IFB报文OTH R_BUF中数据个数，以128bit为单位
+merge_dmux_ifb_ren	1	I	IFB R_BUF的读使能
+merge_dmux_ifb_rid	1	I	IFB R_BUF的读ID；0：G.HN  1：OTH
+dmux_merge_ifb_rdata	128	O	IFB R_BUF输出的读数据
+pon_efb_rbuf_cnt	8	O	EFB报文G.HN R_BUF中数据个数，以128bit为单位
+oth_efb_rbuf_cnt	8	O	EFB报文OTH R_BUF中数据个数，以128bit为单位
+merge_dmux_efb_ren	1	I	EFB R_BUF的读使能
+merge_dmux_efb_rid	1	I	EFB R_BUF的读ID；0：G.HN  1：OTH
+dmux_merge_efb_rdata	128	O	EFB R_BUF输出的读数据
+biff_ram_wen	1	I	BI_FIFO的写使能
+biff_ram_ren	1	I	BI_FIFO的读使能
+biff_ram_addr	5	I	BI_FIFO的写地址
+biff_ram_wdata	85	I	BI_FIFO的写数据
+biff_ram_rdata	85	O	BI_FIFO的读数据
+MEMP ITF
+memp_eps_afull[3:0]	4	I	MEMP给EPS的读命令反压信号
+memp_eps_empty [3:0]	4	I	MEMP给EPS的读返回数据请求信号
+eps_memp_wen	1	O	EPS给MEMP的读命令的写使能脉冲，高有效
+eps_memp_wid[1:0]	2	O	EPS给MEMP的读命令的写ID 
+eps_memp_cap[12:0]	13	O	EPS给MEMP的读命令的数据（起始CELL地址）
+eps_memp_burst[3:0]	4	O	EPS给MEMP的读命令的数据（burst次数），以128bit为基数，必须大于0
+eps_memp_offset[3:0]	4	O	EPS给MEMP的读命令的偏移量，报文第一个分片固定有FRM_INFO，如果有扩展FD，需要从2开始，如果没扩展FD，则从1开始。
+memp_eps_cnt0[5:0]	6	I	MEMP的ID0读数据FIFO中剩余数据的个数
+memp_eps_cnt1[5:0]	6	I	MEMP的ID1读数据FIFO中剩余数据的个数
+memp_eps_cnt2[5:0]	6	I	MEMP的ID2读数据FIFO中剩余数据的个数
+memp_eps_cnt3[5:0]	6	I	MEMP的ID3读数据FIFO中剩余数据的个数
+eps_memp_ren	1	O	EPS给MEMP的读数据使能，高有效
+eps_memp_rid[1:0]	2	O	EPS给MEMP的读ID
+memp_eps_rdata[127:0]	128	I	EPS从对MEMP读出的数据
+DMC AXI ITF
+dp_ddr_en	1	I	DDR使能
+dp_ddr_base_addr[15:0]	16	I	DDR基址
+dp_arvalid	1	O	读通道命令使能 
+dp_araddr[31:0]	32	O	读通道命令地址，按128字节BLOCK读出
+dp_arid[3:0]	4	O	读通道命令ID, 2：读GHN_FD；3：读OTH_FD; 4：读GHN_DATA；5：读OTH_DATA。
+dp_arlen[3:0]	4	O	读通道命令长度，0----8字节，1---16字节，…，7---64字节 ，15---128字节
+dp_arready	1	I	读命令通道READY指示
+dp_rvalid	1	I	读数据有效指示
+dp_rdata [63:0]	64	I	读数据
+dp_rid[3:0]	4	I	读数据ID
+dp_rlast	1	I	读数据最后一拍指示
+dp_ready	1	O	读数据通道 READY指示
+EPS_DIO ITF
+efb_cff_afull_th0	3	I	CMD_FIFO的FD命令将满水线
+efb_cff_afull_th1	3	I	CMD_FIFO的数据命令将满水线
+pon_fdbuf_afull_th	3	I	PON FD_BUF的将满水线
+oth_fdbuf_afull_th	3	O	OTH FD_BUF的将满水线
+rbuf_eq_alempty_th	6	O	RD_BUF空闲链表将空水线
+fd_ecc_1bit_int_st	1	I	FD ECC 校验1bit错误置位状态
+fd_ecc_2bit_int_st	1	I	FD ECC 校验2bit错误置位状态
+fd_ecc_1bit_int_mask	1	I	FD ECC校验1bit错误中断掩码。                                        0：不屏蔽中断，打开；
+1：屏蔽中断，关断。
+fd_ecc_1bit_int_mask	1	I	FD ECC校验1bit错误中断掩码。                                        0：不屏蔽中断，打开；
+1：屏蔽中断，关断。
+fd_ecc_2bit_int_mask	1	I	FD ECC校验2bit错误中断掩码。                                        0：不屏蔽中断，打开；
+1：屏蔽中断，关断。
+fd_ecc_1bit_int_fset	1	I	FD_ECC 校验1bit错误中断软件强制置位。                              0：取消强制置位；
+1：强制置位中断。
+fd_ecc_2bit_int_fset	1	I	FD_ECC 校验2bit错误中断软件强制置位。                              0：取消强制置位；
+1：强制置位中断。
+fd_err_1bit_set	1	I	FD ECC校验1bit错误中断置位。
+fd_err_2bit_set	1	I	FD ECC校验2bit错误中断置位。
+ecc_err_inc	1	O	ram ECC 校验出错统计计数器。
+efb_fdbuf_of_set	1	O	FD_BUF上溢
+efb_fdbuf_uf_set	1	O	FD_BUF下溢
+dmux_state	32	O	DMUX状态寄存器
+
+3.4.3.3	设计实现
+DMUX模块主要是将读FD的DMC命令和读报文数据的DMC命令存入命令FIFO中，将命令发送给DMC模块；将DMC返回FD存储在FD_BUF中，将DMC返回的数据存储在RD_BUF中；实现FD_FIFO、INFO_RAM和BI_FIFO的时分复用。
+
+3.4.3.3.1	产生DMC的命令接口信号
+FD_RX模块产生读FD的DMC命令，DMUX模块接收此命令存入CMD_FIFO中；DSCH模块产生读据命令，此命令可能是读DMC命令或者读MEMP命令，DMUX模块识别后，将读DMC命令存入CMD_FIFO中，将读MEMP命令直接发送给MEMP模块。DMUX从CMD_FIFO中，将命令取出解析后，产生DMC的命令接口信号。
+[3:0]：因为数据位宽是128bit，所以低4bit表示16Byte是固定为0；
+[4]：第5bit在17项目给的是sop，即地址偏移1，可以从SOP的第2拍开始读数据；
+[7:4]：表示有16拍数据，每拍16Byte。256Byte是最小分片粒度，所以低[7:5]固定为0；
+[10:0]：是COL，可以表示2KByte；
+[13:11]：是BANK，即有8个BANK；
+[23:14]：是ROW，可以表示1024；
+对应5182H的EFB总缓存32K*512Byte=2K*8*1024。
+注意：DP的地址—cmd_ccap是随便放，但是需保证低11bit是COL，[13:11]是BANK，[23:24]是ROW即可。而BANK通常用最低的3bit，这样可以平均分配到8个BANK。
+如果CELL配置是512Byte，DDR是不感知的，在EQM将报文搬移到DDR的时候，用了同一个地址，然后最低位加上offset来区别，相当于最高位没有用，所以在第9bit要增加offset。其他地址往上推，BANK的位置不变，ccap的第[15]bit无效。
+CELL等于1024、2048的类推。
+如果DDR是32bit，同样[7:0]是表示256Byte，原先一个COL表示16bit，现在32bit得用两个COL来表示，所以COL增加1bit。
+[11:0]：是COL，可以表示4KByte；
+[14:12]：是BANK；
+[23:15]：是ROW，可以表示512
+3.4.3.3.2	缓存DMC的读数据
+DMC返回数据后，根据返回信号的RID信号识别FD/DATA和PON/OTH的数据，若是PON的FD，则将其存入PON的FD_BUF中；若是OTH的DATA，将其存入OTH的RD_BUF中；其它同上。若FD_RX模块有读FD请求或者MERGE模块有读数据请求，在响应的BUF中取出数据送出去。
+3.4.3.3.3	FD_FIFO、INFO_RAM以及BI_FIFO的时分复用
+FD_FIFO使用组FIFO，深度为：{16(tcont)+6(GE) +4(PIE)+1(PRBS)+1(WOE)+1(LB)}  * 8 = 232；
+INFO_RAM的深度为：28*1 = 28；
+BI_FIFO的深度为：（2PON+1OTH+1WOE）* 16 = 64；
+FD_FIFO、INFO_RAM时分复用一块SPRAM，BI_FIFO单独用一块SPRAM；
+RAM_SHB的大小为(232 + 28) * 69 = 17940；
+RAM_BI的大小为64*100=6400
+FD_FIFO是8拍内1读1写，INFO_ RAM在调度时是1读1写，在FD返回时又是1读一写，所以是两读两写；INFO_ RAM与FD_FIFO同时只有一个读存在，可以在同一拍。故RAM的带宽是：5/8。
+BI_FIFO是1写4读，实际上82H的BIFF0固定不用，只用到1写3读。
+表19 DMUX共享SRAM时分复用时隙表
+	0	1	2	3	4	5	6	7
+FD_FIFO				RD			WR	
+INFO_RAM	RD		WR	RD				WR
+BI_FIFO	WR	RD	RD		RD	RD		
+
+3.4.3.3.4	RBUF链表设计
+RBUF的功能是用于缓存从EFB返回的数据，按BIFF的编号分成4组进行缓存。总缓存是128x160。
+当RBUF总个数、各通道个数满足大于水线时，反压DSCH调度。
+5118V200的总缓存是128x160；5117PV100的总缓存是128x64；5182HV100参考5118V200，用128x160。
+RBUF采用链表的方式来实现，即各个通道可以抢占RBUF的缓存。
+参考5118V200，总反压水线是142，反压的时候最多可以再写入18拍数据，实际上最多只有15拍。
+各通道的反压水线都是48。由于5182HV100的PON口只有单BIFF，所以PON可以配置到96。即OTH和WOE最多可以抢占48，PON口最多可以抢占96，而总的可以抢占142。
+RBUF链表设计
+为简化链表长度，将每4行绑定，做为一个CELL。类似FAM的建链，片外一个CELL有16个offset。这里一个CELL有4个offset。所以链表的长度是160/4=40。
+链表linktb初始化如下图所示，地址0写入1，地址1写入2，以此类推。这里从地址0读出来，得到1，就知道下一跳是1，即0和1是链接在一起。
+初始化头链q_head和尾链q_tail都是0；写入数据时，每写4个数据，尾链更新为新的空闲链表，而原先的尾链则变成中间链。读出数据时，从q_head开始读，每读出4个数据，将q_head释放到空闲链表中，然后更新下一跳为q_head。
+由于RBUF的数据是先进先出，所以不需要按报文来建链，而是所有数据都链接在一起。
+链表的主功能分成三个部分，分别是头链更新、尾链更新、链表管理。
+1、	头链更新
+初始化时，头链为0；
+写第一个数据时，根据队列是空的且写使能有效，将q_head更新为空闲指针eq_head。
+读数据时，如果队列只有1个数，同时写使能有效，且q_tail_offset等于0，即读完该数据后，再写入的新数据会申请新的空闲指针eq_head，此时空闲指针eq_head要下一拍才写入linktb，所以q_head直接用eq_head。
+如果队列大于1个数，则按q_head_offset等于3时，从linktb中更新新的指针给q_head，以q_head为索引查出。
+2、	尾链更新
+初始化时，尾链为0；
+写数据时，q_tail_offset等于0时，q_tail更新为eq_head。
+
+3、	链表管理
+初始化时将地址0~39，写入1~39，0。
+写数据时，q_tail_offset为0；如果只剩一个数，同时读的q_head等于q_tail，即前面一个CELL已释放，不需要建链。或者写的时候，队列还是空的，还不需要建链。
+如果不止一个数，则需要建链，将eq_head写入linktb。
+读数据时，q_head_offset等于3，释放链表，将链表q_head存入以eq_tail为索引的链表中。
+
