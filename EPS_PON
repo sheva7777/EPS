@@ -1,0 +1,12 @@
+1	EPS_PON模块主要功能
+EPS_PON接收EPS送过来的上行数据，经过异步转换和接口适配根据10G GPON/GPON/10G EPON/EPON模式把数据发给NGMAC/GMAC/XGEMAC，并进行dbru/report的带宽计算。
+EPS_PON模块支持的主要特性如下：
+ 5182H支持GPON/xGPON上行16个TCONT，5182T支持xGPON上行32个TCONT；
+ 支持10G EPON对称模式上行16个单播LLID，10G EPON非对称模式2.5G/1G模式上行16个单播LLID，EPON上行8个单播LLID。
+ 支持16个T-CONT的DBRu或者16个LLID的Report计算，可查询配置Report/Dbru。Report/Dbru写操作进行单独配置保护；支持计算的IPG可配置，支持计算溢出告警。
+ 支持平均帧长计算，可以配置是否进行平均帧长计算。
+ 支持基于通道进行使能的Flush，支持对flush丢弃的报文进行分通道统计。
+ 支持TCONT/LLID最大个数减半的优先级抢占模式，比如支持10G EPON 8个LLID优先级抢占模式。
+ 支持TX_BUFFER内部FIFO发送水线门限可配置；
+ 支持多模共享的TX_BUF_PON，并每从TX_BUF_PON的FIFO读出1个报文，都要向EPS反馈一个减信号，用于EPS进行PON低功耗统计。
+ 支持TX_BUF_PON的FIFO通道数可配，支持32/16/8/4个通道的配置。
