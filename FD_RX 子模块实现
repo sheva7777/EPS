@@ -1,0 +1,384 @@
+该模块与EQM、DSCH、DMUX模块接口，主要功能如下：
+1、	接收EQM的PRE_FD，各个通道的PRE_FD根据通道号存入相应的PRE_FD_FIFO中；
+2、	根据PRE_FD_FIFO的将满状态向EQM发出反压；
+3、	DSCH模块根据调度策略调度出PRE_FD_FIFO信息后向MEMP/DDR申请数据，并将FD信息返回到FD_FX模块；
+4、	根据返回的FD进行PIE映射，产生新的FD信息；
+5、	根据新的FD进行入口统计；
+6、	根据新的FD将shaping信息，二次入队信息和cell信息反馈给EQM。
+3.4.1.2	接口信号描述
+表6 FD_RX接口信号表
+Name	Width	Direction	Description
+Name	Width	Direction	Description
+TOP
+clk_sys_dp	1	I	DP时钟信号。
+rst_dp_n	1	I	DP逻辑复位信号，低电平有效。
+ctrl_bus[9:0]	10	I	CTRL_BUS
+dft_ctrl_bus[4:0]	5	I	DFT_CTRL_BUS
+efb_cell_size[1:0]	2	I	DDR CELL大小  
+0: 256Byte  1: 512Byte  2: 1KByte  3: 2KByte
+sync_eps	1	O	EPS子模块同步指示信号
+
+EQM_FD and Backpress
+eqm_eps_fd_sync	1	I	FD节拍同步指示信号，高电平有效。
+eqm_eps_fd_vld	1	I	FD数据有效指示信号，高电平有效。
+eqm_eps_fd_data[15:0]	16	I	FD数据。
+eps_eqm_ge_xoff[5:0]	5	O	GE端口FD_FIFO Full反压信号，高电平有效。
+epq_eqm_pon_xoff[15:0]	16	O	PON通道FD_FIFO Full反压信号，高电平有效。
+eps_eqm_pie_xoff[3:0]	4	O	PIE逻辑端口FD_FIFO Full反压信号，高电平有效。
+eps_eqm_prbs_xoff	1	O	PRBS端口FD_FIFO Full反压信号，高电平有效。
+eps_eqm_woe_xoff	1	O	WOE端口FD_FIFO Full反压信号，高电平有效。
+eps_eqm_lb_xoff	1	O	二次入队端口FD_FIFO Full反压信号，高电平有效。
+
+EQM 二次入队接口
+eps_eqm_fd_req	1	O	二次入队FD请求指示信号，高电平有效。
+eps_eqm_fd_qid[7:0]	8	O	报文二次入队队列ID。
+eps_eqm_fd_ponpri[2:0]	3	O	PON带宽上报优先级。
+eps_eqm_fd_hptr [14:0]	15	O	包的头地址。
+eps_eqm_fd_mci	1	O	组播报文指示，高电平有效。
+eps_eqm_fd_mc_id[9:0]	10	O	组播ID。
+eps_eqm_fd_sport[3:0]	4	O	源端口。
+eps_eqm_fd_dgp[1:0]	2	O	目的端口组。
+eps_eqm_fd_hl[9:0]	10	O	eps_eqm_fd_hl[9]：CELL数。
+eps_eqm_fd_hl[8:0]：余数byte。
+eps_eqm_fd_bl[17:0]	18	O	eps_eqm_fd_bl[17:11]：CELL数。
+eps_eqm_fd_bl[10:0]：余数byte。
+eps_eqm_fd_hl[7:0]	8	O	包头长度，单节是字节，范围是1~255Byte
+eps_eqm_fd_bl[13:0]	14	O	包身长度，单节是字节，范围是0~16383Byte
+eps_eqm_fd_egrb[3:0]	4	O	出端口，用于计算不同出端口的精确包长。
+eps_eqm_fd_extfd	1	O	扩展FD标识，高电平有效。
+eqm_eps_fd_ack	1	I	次入队FD请求响应信号，高电平有效。
+
+EQM 队列信息反馈接口
+eps_eqm_cell_req	1	O	精确包长请求信号，高电平有效。
+eqm_eps_cell_ack	1	I	精确包长响应信号，高电平有效。
+eps_eqm_cell_qid[8:0]	9	O	精确包长入队队列ID。
+eps_eqm_cell_mci	1	O	组播报文指示，高电平有效。
+eps_eqm_cell_efb	1	O	0:IFB;1:EFB。
+eps_eqm_cell_hl[9:0]	10	O	eps_eqm_cell_hl [9]：CELL数。
+eps_eqm_cell_hl [8:0]：余数byte。
+eps_eqm_cell_bl[17:0]	18	O	eps_eqm_cell_bl [17:11]：CELL数。
+eps_eqm_cell_bl [10:0]：余数byte。
+eps_eqm_cell_hl[7:0]	8	O	包头长度，单节是字节，范围是1~255Byte
+eps_eqm_cell_bl[13:0]	14	O	包身长度，单节是字节，范围是0~16383Byte
+
+EQM shaping长度补偿接口
+eps_eqm_shape_req	1	O	Shaper补偿请求信号，高电平有效。
+eps_eqm_shape_qid[8:0]	9	O	Shaper补偿队列ID。
+eps_eqm_shape_len[14:0]	15	O	eps_eqm_shaper_len = 原始包长 - 出队包长，其中最高位为符号位。
+eps_eqm_shape_port[1:0]	2	O	补偿端口调度器编号。
+0：Loopback；
+1：PIE或PRBS或WOE；
+2：ETH；
+3：PON；
+eps_eqm_shape_uwgt[2:0]	3	O	报文消耗各级调度器DRR共享权重指示
+eps_eqm_shape_ssel[5:0]	6	O	报文调度器调度算法
+eps_eqm_shape_ack	1	O	Shaper补偿响应信号，高电平有效。
+
+DSCH
+fdff_dsch_efb[28:0]	29	O	FD的efb标志
+fdff_dsch_jfi[15:0]	16	O	Jumbo帧指示
+dsch_fdff_ren	1	I	DSCH模块发出的FD_FIFO的读请求
+dsch_fdff_rchid[4:0]	5	I	DSCH给的FD_FIFO的读出端口id，用于产生读地址
+fdff_empty[28:0]	29	O	FD_FIFO的空标志
+fdff_dsch_rdata[58:0]	59	O	返回给DSCH的FD数据
+
+DMUX
+dmux_fdrx_efb_rdy	1	I	读EFB命令的ready信号
+efb_cmd_fd_wr	1	O	读EFB命令的写使能脉冲，高有效
+efb_cmd_fd_wdata[26:0]	27	O	读EFB命令的相关数据
+efb_fdbuf_empty[1:0]	2	I	EFB给EPS的读返回数据请求信号；0：PON_FD；1：OTH_FD。
+efb_fdbuf_ren	1	O	EPS给EFB的读数据使能，高有效;
+efb_fdbuf_rid	1	O	EPS从EFB的读出的数据ID；0：GHN_FD；1：OTH_FD;
+efb_fdbuf_rdata[127:0]	128	I	EPS从对EFB的读出的数据
+fdff_ram_wen	1	O	FD_FIFO的写使能
+fdff_ram_ren	1	O	FD_FIFO的读使能
+fdff_ram_addr[7:0]	8	O	FD_FIFO的写地址
+fdff_ram_wdata[78:0]	79	O	FD_FIFO的写数据
+fdff_ram_rdata[78:0]	79	I	FD_FIFO的读数据
+
+MERGE
+merge_fdrx_fd_vld	1	I	MERGE模块给过来的FD有效标识
+merge_fdrx_rd[127:0]	128	I	MERGE模块给过来的FD信息
+fdrx_merge_afull	1	O	FD FIFO将满信号
+
+TX_ITF
+linktb_init_done	1	I	TX_BUF链表初始化完成
+
+EPS_DIO 表项 INTF
+clr_statistic	1	I	统计清零信号。
+config_rst_n	1	I	DP系统配置复位信号，低电平有效。
+eps_init_done	1	O	表项初始化完成信号
+st_init_done	1	O	表项初始化预完成信号
+st_init_addr[7:0]	8	O	表项初始化地址
+clr_statistic_prcs	1	O	统计清零预有效信号
+clr_statistic_prcs_vld	1	O	统计清零有效信号
+clr_statistic_addr[6:0]	7	O	统计清零地址
+fd_ecc_chk_bpas	1	I	ECC旁路选择
+eps_dio_cs	1	I	入口统计表项片选
+eps_dio_rw	1	I	CPU给的表项的读写使能，高写低读
+eps_dio_addr[8:0]	9	I	CPU给表项的读写地址
+eps_dio_wdata[31:0]	32	I	CPU给表项的写数据
+eps_input_st_rdata[31:0]	32	O	返回给CPU的入口统计表项读数据
+eps_input_st_rdy	1	O	返回给CPU的读写ready握手信号
+linktb_init_done	1	I	链表初始化完成
+
+EPS_DIO 配置&统计寄存器（x为0~15）
+pon_glit_drop_mode	1	I	错误出端口的FD丢弃使能配置：                                      1：打开，在EPS入口丢弃错误的ECHID的报文，不释放缓存。            
+0：关闭，在PIE出口丢弃报文，释放缓存。
+err_ech_fd_drop_en	1	I	EPS 入口丢弃NNI口的毛刺包配置寄存器：                            0: 不丢弃；
+1: 丢弃报文长度少于等于16字节的报文（报文净荷长度）；
+2: 丢弃报文长度少于等于32字节的报文（报文净荷长度）；                            3: 保留。
+注意：NNIGE模式只支持0x2的配置，PON模式都支持。
+fd_ecc_chk_bpas	1	I	fd ecc 校验旁路寄存器
+gro_id_vld_x	1	I	GRO重组报文流ID匹配有效位, 高电平有效
+gro_id_x[3:0]	4	I	GRO重组报文流ID
+rxhash_vld_x	1	I	五元组RXHASH值匹配有效位，高电平有效。
+rxhash_x[1:0]	2	I	五元组RXHASH值
+pie_ech_vld_x	1	I	PIE虚拟端口匹配有效位，高电平有效
+pie_ech_x[1:0]	2	I	PIE虚拟端口
+pie_sq_vld_x	1	I	PIE报文优先级匹配有效位，高电平有效。
+pie_sq_x	2	I	PIE报文优先级。
+pie_rule_vld_x	1	I	PIE队列映射规则有效位，高电平有效。
+pie_cfg_chid_x[3:0]	4	I	PIE队列映射ID（匹配结果）。
+ingress_x[15:0]	16	I	接收报文的源端口，匹配源端口。
+pie_rule_pri_x[3:0]	4	I	PIE队列映射ID（匹配结果），匹配优先级。
+pie_def_chid[3:0]	4	I	PIE队列匹配未命中默认CHID配置寄存器。
+pie_chid_unhit_cnt_inc	1	O	PIE队列匹配未命中统计
+pie_chid_hit_cnt_inc	1	O	PIE队列匹配单次命中统计
+pie_chid_mhit_cnt_inc	1	O	PIE队列匹配多次命中统计
+cell_ff_afull_th[1:0]	2	I	cell_fifo的将满水线
+shape_ff_afull_th[1:0]	2	I	shape_fifo的将满水线
+sec_ff_afull_th[1:0]	2	I	sec_fifo的将满水线
+cfg_hl_len	9	I	报文head的最小长度配置
+eth_fd_bp_th	5	I	eth通道反压水线，用于pre_fd的调度
+pie_fd_bp_th	5	I	pie通道反压水线，用于pre_fd的调度
+woe_fd_bp_th	5	I	woe通道反压水线，用于pre_fd的调度
+prbs_fd_bp_th	5	I	prbs通道反压水线，用于pre_fd的调度
+lb_fd_bp_th	5	I	loopback通道反压水线，用于pre_fd的调度
+eth_prefd_bp_th	3	I	eth_prefd_fifo的将满水线，用于反压EQM
+pie_prefd_bp_th	3	I	pie_prefd_fifo的将满水线，用于反压EQM
+woe_prefd_bp_th	3	I	woe_prefd_fifo的将满水线，用于反压EQM
+prbs_prefd_bp_th	3	I	prbs_prefd_fifo的将满水线，用于反压EQM
+lb_prefd_bp_th	3	I	loopback_prefd_fifo的将满水线，用于反压EQM
+eth_port_en	6	I	反压EQM使能，为0时一直反压eth端口
+pie_port_en	4	I	反压EQM使能，为0时一直反压pie端口
+woe_port_en	4	I	反压EQM使能，为0时一直反压woe端口
+prbs_port_en	1	I	反压EQM使能，为0时一直反压prbs端口
+lb_port_en	1	I	反压EQM使能，为0时一直反压loopback端口
+eps_lng_pkt_cnt_inc	1	O	长包统计
+eps_sht_pkt_cnt_inc	1	O	短包统计
+eps_glt_pkt_cnt_inc	1	O	毛刺包统计
+pon_bp_en			
+glb_bp_en	1	I	全局反压使能
+err_chid_chk	1	O	错误出通道号信号
+all_port_bp	1	O	全局反压信号
+
+EPS_DIO  DEBUG寄存器
+ech_err_set	1	O	错误出通道告警
+err_bl_set	1	O	错误BOBY长度告警
+sport_err_set	1	O	错误源端口告警
+glit_pkt_set	1	O	毛刺包告警
+pre_fdff_of_set	1	O	PRE FD_FIFO上溢
+pre_fdff_uf_set	1	O	PRE FD_FIFO下溢
+sec_ff_of_set	1	O	SEC_FIFO上溢
+sec_ff_uf_set	1	O	SEC_FIFO下溢
+cell_ff_of_set	1	O	CELL_FIFO上溢
+cell_ff_uf_set	1	O	CELL_FIFO下溢
+shape_ff_of_set	1	O	SHAPE_FIFO上溢
+shape_ff_uf_set	1	O	SHAPE_FIFO下溢
+fd_err_1bit_set	1	O	fd ecc 1bit错误
+fd_err_2bit_set	1	O	fd ecc 2bit错误
+woe_eqm_bp_st	4	O	woe端口反压eqm的实时状态
+pie_eqm_bp_st	4	O	pie端口反压eqm的实时状态
+eth_eqm_bp_st	6	O	eth端口反压eqm的实时状态
+prbs_eqm_bp_st	1	O	prbs端口反压eqm的实时状态
+oth_fdff_cnt	32	O	OTH  FD_FIFO的存储fd个数
+port_idx	5	I	FD_FIFO的ID
+fdff_cnt	5	O	FD_FIFO对应ID的存储fd的个数
+eqm_itf_ff_dcnt	32	O	反馈给EQM的个数
+fd_rec_state0	32	O	FD_RX的状态0
+fd_rec_state1	32	O	FD_RX的状态1
+
+3.4.1.1	数据结构
+3.4.1.1.1	PRE_FD数据结构（从EQM读出整理后给DSCH）
+MSB	LSB	Width	Field	Description
+66	66	1	mc	0表示单播，1表示组播
+65	63	3	hl	对于单播报文，8bit表示报文长度，单位是16Byte；对于组播报文，HL[2:0]表示HEAD长度，BL[4:0]表示BODY长度，单位是32Byte。
+62	58	5	bl	
+65	58	8	cp_len	MC：0表示单播，1表示组播；
+CP_LEN[7:0]：对于单播报文CP_LEN[7:0]表示报文长度，单位是16Byte；
+对于组播报文，片内缓存时，CP_LEN[4:0]表示报文HEAD长度，单位是16Byte，可以表示到512Byte。CP_LEN[7:5]无效。
+对于组播报文，片外缓存时，CP_LEN[7:4]表示报文HEAD长度，单位是32Byte，可以表示到512Byte。CP_LEN[3:0]表示报文BODY长度，单位是32Byte，可以表示到512Byte。
+注：报文HEAD长度最大是319Byte。
+57	55	3	uwgt	报文消耗各级调度器DRR共享权重指示，EPS透传反馈给EQM
+54	49	6	ssel	报文调度器调度算法，EPS透传反馈给EQM
+48	48	1	pie_pri[3]	PIE优先级的最高位
+47	47	1	ech_err	通道号错误标识。
+46	32	15	aplen	EPS读取的原始包长减去出队的包长得到的值
+31	23	9	qid	队列号
+22	16	7	ech	通道号
+15	0	16	hcap	CELL地址
+
+3.4.1.1.2	FD_INFO数据结构（从MEMP或DMC读出）
+MSB	LSB	Width	Field	Description
+127	120	8	ecc_oh	ECC
+119	111	9	reserved	保留。
+110	106	5	wred_pattern	WRED模板号
+105	104	2	rxhash	Rxhash值。
+103	103	1	reserved	保留。
+102	102	1	gro_id_en	GRO重组报文流ID匹配使能，用于EPS映射PIE通道。
+101	98	4	gro_id	GRO重组报文流ID，用于EPS映射PIE通道。
+97	96	2	tcid	Trace Counter Identifier. It indicates whether the PE and TX MAGs will count the packets into trace counters. It is encoded as follows:
+l 0 = the packet does not be count in any trace counter.
+l 1 = the packet must be count into the trace counter 0.
+l 2 = the packet must be count into the trace counter 1.
+l 3 = the packet must be count into the trace counter 2.
+Only valid when the SOP signal is also asserted.
+95	87	9	secid	二次入队队列ID H:8BIT,T:9BIT
+86	84	3	reserved	保留。
+86	84	3	wred_pri	WRED 优先级
+83	72	12	gemport_id	Gemport ID，就是FCB中的line_info[11:0]
+71	71	1	esat_pkt	ESAT报文标识，高电平有效。
+70	67	4	qid_pri	队列优先权
+66	66	1	scr	DBA报文颜色（GPON使用）
+65	65	1	prbs_loop	PRBS环回。
+64	64	1	ext_fd	扩展fd指示
+63	63	1	frm_1588	报文为1588的指示信号，出口为ETH的1588报文需要该标志。
+62	60	3	reserved	保留。
+59	59	1	mc	组播指示
+58	48	11	mc_id	组播ID值
+47	42	6	reserved	保留。
+41	37	5	egr	出端口。
+36	32	5	igr	源端口
+31	31	1	jfi	jumbo flag，当编辑后包长大于配置值时jfi置1，否则置0。编辑后包长包括FD信息。配置值默认是2500。
+30	28	3	reserved	保留。
+27	21	7	bb_num	报文body的块数。
+20	10	11	bb_left	报文body长度对块长度取模之后剩下的余数。
+9	9	1	hb_num	报文head的块数。
+8	0	9	hb_left	报文head长度对块长度取模之后剩下的余数。
+
+3.4.1.1.3	FD的数据结构（整理后给DSCH）
+表7 FD_FIFO数据结构表
+MSB	LSB	Width	Field	Description
+91	90	2	boby_left[10:9]	报文boby的最后一个cell的剩余长度，以字节为单位
+90	90	1	east_pkt	ESAT报文标识，高电平有效。
+89	89	1	ext_fd	扩展FD指示
+88	77	12	gemport	Gemport ID，就是FCB中的line_info[11:0]
+76	74	3	pon_pri	PON的颜色和优先权/PIE通道情况下低2bit为RXHASH
+73	71	3	pie_chid	映射后的PIE通道号
+70	69	2	dgp	出端口组号
+70	70	1	frm_1588	报文为1588的指示信号，出口为ETH的1588报文需要该标志
+69	69	1	prbs_loop	PRBS环回
+68	68	1	jfi	Jumbo帧标识
+67	67	1	mci	报文是否组播标识
+66	56	11	mc_id	组播ID值
+55	55	1	ech_err	出端口错误标识
+54	48	7	ech	出端口内部编号
+47	43	5	sport	源端口
+42	32	11	boby_left	报文boby的最后一个cell的剩余长度，以字节为单位
+报文body长度对块长度取模之后剩下的余数。
+当IFB的时候，对160字节取模；当EFB的时候，对256/512/1024/2048取模。
+0～511表示取模余数。
+31	25	7	bb_num	BOBY占整CELL个数
+0：没有完整的块；
+1～113表示有1～113个数据，IFB/EFB一个块分别为160字节和256/512/1024/2048字节
+24	17	8	hb_left	报文HEAD的最后一个cell的剩余长度，以字节为单位报文head长度对块长度取模之后剩下的余数。
+当IFB的时候，对160字节取模；当EFB的时候，对256取模。
+0～255表示取模余数。
+24	17	8	hb_left	报文HEAD的最后一个cell的剩余长度，以字节为单位报文head长度对块长度取模之后剩下的余数。
+当IFB的时候，对160字节取模；当EFB的时候，对256取模。
+0～255表示取模余数。
+16	16	1	hb_num	HEAD占整CELL个数
+IFB的时候，一个块为160字节；EFB的时候，一个块是512字节。
+0：表示没有完整的块；
+1：表示1个块；
+15	0	16	hcap	报文首个CELL地址
+
+3.4.1.1.4	二次入队的数据结构
+因为EQM处理二次环回的数据时可能做不到每8拍读一次，所以有可能造成数据累积，所以给EQM的反馈信息先存到SEC_FIFO中，再读出给EQM。该FIFO的大小是12x80，水线是11。
+因为DDR的命令FIFO深度是12，支持outstanding的突发操作，所以二次入队的FIFO需要与DDR命令深度匹配，才能最大效率地利用DDR的带宽，所以深度设计为12。
+二次入队的数据结构如下：
+表8 二次入队信息表
+MSB	LSB	Width	Field	Description
+79	79	1	gro_en	PIE LRO使能。
+78	78	1	ext_fd	扩展FD标识。
+77	73	5	egrb	出端口。
+72	64	9	secid（qid1）	二次入队队列ID
+63	61	3	pon_pri	PON的颜色和优先权/PIE通道情况下为RXHASH
+60	56	5	secpri	二次入队优先权（用于选择WRED）
+55	40	16	hcap	报文首个CELL地址
+39	39	1	mci	组播指示
+38	28	11	mcid	组播ID
+27	23	5	sport	队列的源端口
+22	14	9	hl	包头长度，单位字节，范围是1~319Byte
+13	0	14	bl	包身长度，单位字节，范围是0~16383Byte
+		2	dgp	出端口组
+26	26	1	hb_num	HEAD占整CELL个数
+IFB的时候，一个块为160字节；EFB的时候，一个块是512字节。
+0：表示没有完整的块；
+1：表示1个块；
+25	18	8	hb_left	报文HEAD的最后一个cell的剩余长度，以字节为单位报文head长度对块长度取模之后剩下的余数。
+当IFB的时候，对160字节取模；当EFB的时候，对256取模。
+0～255表示取模余数。
+17	11	7	bb_num	BOBY占整CELL个数
+0：没有完整的块；
+1～113表示有1～113个数据，IFB/EFB一个块分别为160字节和256/512/1024/2048字节
+10	0	11	boby_left	报文boby的最后一个cell的剩余长度，以字节为单位
+报文body长度对块长度取模之后剩下的余数。
+当IFB的时候，对160字节取模；当EFB的时候，对256/512/1024/2048取模。
+0～511表示取模余数。
+
+3.4.1.1.5	CELL队列资源的数据结构
+因为EQM处理CELL的数据时是每8拍读一次，可能造成1~2报文的累积，所以给EQM的反馈信息先存到CELL_FIFO中，再读出给EQM。该FIFO的大小是4x80，水线是3。
+CELL队列资源的数据结构如下：
+表9 cell队列资源信息表
+MSB	LSB	Width	Field	Description
+35	35	1	gro_en	PIE LRO使能。
+34	34	1	ext_fd	扩展FD标识。
+33	33	1	efb	报文的efb指示
+32	24	9	qid	队列ID
+23	23	1	mci	组播指示
+22	14	9	hl	包头长度，单位字节，范围是1~255Byte
+13	0	14	bl	包身长度，单位字节，范围是0~16383Byte
+26	26	1	hb_num	HEAD占整CELL个数
+IFB的时候，一个块为160字节；EFB的时候，一个块是512字节。
+0：表示没有完整的块；
+1：表示1个块；
+25	18	8	hb_left	报文HEAD的最后一个cell的剩余长度，以字节为单位报文head长度对块长度取模之后剩下的余数。
+当IFB的时候，对160字节取模；当EFB的时候，对256取模。
+0～255表示取模余数。
+17	11	7	bb_num	BOBY占整CELL个数
+0：没有完整的块；
+1～113表示有1～113个数据，IFB/EFB一个块分别为160字节和256/512/1024/2048字节
+10	0	11	boby_left	报文boby的最后一个cell的剩余长度，以字节为单位
+报文body长度对块长度取模之后剩下的余数。
+当IFB的时候，对160字节取模；当EFB的时候，对256/512/1024/2048取模。
+0～511表示取模余数。
+10	0	11	boby_left	报文boby的最后一个cell的剩余长度，以字节为单位
+报文body长度对块长度取模之后剩下的余数。
+当IFB的时候，对160字节取模；当EFB的时候，对256/512/1024/2048取模。
+0～511表示取模余数。
+
+3.4.1.1.6	SHAPE的数据结构
+因为EQM处理CELL的数据时是每8拍读一次，可能造成1~2报文的累积，所以给EQM的反馈信息先存到CELL_FIFO中，再读出给EQM。该FIFO的大小是4x80，水线是3。
+HAPE的数据结构如下：
+表10 SHAPE信息表
+MSB	LSB	Width	Field	Description
+34	32	3	uwgt	报文消耗各级调度器DRR共享权重指示
+31	26	6	ssel	报文调度器调度算法
+25	17	9	qid	队列ID
+16	2	15	len	EPS读取的原始包长减去出队的包长得到的值
+1	0	2	port	端口号
+
+
+3.4.1.2	设计实现
+3.4.1.2.1	固定流水设计
+首先FD_RX模块按照与EQM的接口时序，连续接收5拍数据，将5拍数据重组为1拍数据，同时从FD数据结构中提取出ECH_ID的通道号，对通道号进行重新映射由原来的7bit重新映射成5个bit EPS内部的通道编码。
+EPS将重组后的PRE_FD（包含echid、qid、len等简单信息）信息写到PRE_FD_FIFO中，为了吸收EQM的突发和延时，PRE_FD_FIFO深度为8，可配置将满水线反压。
+由DSCH模块调度出PRE_FD信息，并根据hcap和len向MEMP/DDR申请数据，其中len只有9bit，最高bit表示单播或组播报文，对于单播报文，低8bit表示报文长度，单位是16Byte；对于组播报文，高3bit表示HEAD长度，低5bit表示BODY长度，单位是32Byte。
+数据返回到DMUX模块时，提取出FD信息，给到FD_RX模块，FD_RX模块将FD进行ECC校验，并进行入口统计，如果报文的出口为PIE，则根据igr[31:0](bitmap)+rxhash[1:0]+pie_ech[1:0]+pie_sq[3:0]+gro_id[3:0]进行PIE的队列映射；并提取出shaping包长补偿信息、cell队列资源信息、二次入队信息反馈给EQM。
+将更新后的PIE队列号回写到FD中，给到DSCH模块。
+根据FD信息中的TraceCounter信息进行三种统计。Counter ID有2bit，为0表示没命中，另外三种数值分别进行统计，仅统计报文个数。
+
+
+
