@@ -1,0 +1,262 @@
+3.4.2.1	模块介绍
+此模块完成对各端口数据的调度，负责向EFB提起数据申请。数据调度基于数据分片进行，子模块基于通道组维护数据读取的切片信息。
+
+3.4.2.2	接口信号描述
+表13 DSCH接口信号表
+Name	Width	Direction	Description
+TOP
+clk_sys_dp	1	I	DP时钟信号。
+rst_dp_n	1	I	DP逻辑复位信号，低电平有效。
+sync_eps	1	I	EPS子模块同步指示信号
+gpon_mode	1	I	nni_mode等于0，5，13，即GPON、XGPON、10GGPON
+pon_mode	1	I	nni_mode不等于6，7，8，9，即GPON和EPON类的所有模式
+pon_eq_bp_en	1	I	PON Txbuf 空闲链将空反压使能：                                    1：打开，当PON Txbuf 空闲链将空时反压DSCH切片调度；               
+0：关闭，PON Txbuf 空闲链将空时不影响DSCH切片调度。
+pon_eq_aempty	1	I	空闲链将空。
+EPS_PON ITF
+pon_pri_preempt_mode	1	I	0：普通模式，1：抢占模式。
+eps_pon_cur_vld	1	I	当前处于发送状态的TCONT/LLID有效指示
+eps_pon_cur_tcnt[3:0]	4	I	当前处于发送状态的TCONT/LLID NUM
+eps_pon_nxt_vld	1	I	下一个将进入发送状态的TCONT/LLID有效指示
+eps_pon_nxt_tcnt[3:0]	4	I	下一个将进入发送状态的TCONT/LLID NUM 
+FAM ITF
+eps_fam_query_req	1	O	EPS给FAM的地址查询请求
+eps_fam_query_fa[15:0]	16	O	给FAM的查询当前地址
+fam_eps_query_fa[15:0]	16	I	FAM返回的下一跳地址
+fam_eps_query_ack	1	I	FAM返回地址的响应
+FD_RX ITF
+fdff_dsch_jfi[28:0]	29	I	Jumbo帧指示
+fdff_dsch_efb[28:0]	29	I	EFB指示
+fdff_empty[28:0]	29	I	FD_FIFO空指示
+fdff_dsch_rdata[58:0]	59	I	从FD_FIFO返回的读数据
+dsch_fdff_rchid[4:0]	5	O	发送给FD_FIFO的读通道号
+dsch_fdff_ren	1	O	发送给FD_FIFO的读使能
+DMUX ITF
+info_ram_wen	1	O	info_ram写使能
+info_ram_wdata[72:0]	73	O	info_ram写数据
+info_ram_ren	1	O	info_ram读使能
+info_ram_rdata[72:0]	73	I	info_ram返回的读数据
+info_ram_addr[3:0]	4	O	info_ram的读写地址
+dsch_dmux_cmd_wr	1	O	读切片命令的写诗能
+dsch_dmux_cmd_info[27:0]	28	O	读切片命令
+dmux_dsch_efb_rdy	1	I	EFB ready指示
+dmux_dsch_ifb_rfy	1	I	IFB ready 指示
+pon_rbuf_dec	1	I	
+oth_rbuf_dec	1	I	
+MERGE ITF
+pon0_bi_rr_bp	1	I	
+pon1_bi_rr_bp	1	I	
+biff_dsch_afull[3:0]	4	I	BI_FIFO将满信号
+dsch_biff_wdata[84:0]	85	O	发送给BI_FIFO的写数据
+dsch_biff_wen	1	O	发送给BI_FIFO的写使能
+dsch_biff_wid[3:0]	4	O	发送给BI_FIFO的写ID
+dsch_biff_efb	1	O	BI_FIFO的EFB指示
+dsch_biff_prr	1	O	
+rls_chk_req	1	I	检查释放地址是否与查询地址冲突请求
+rls_chk_ccap[15:0]	16	I	用于检查的地址
+rls_chk_ack	1	O	无冲突后的返回信号
+pon_jf_bi_dec[25:0]	26	I	
+pon_nm_bi_dec[25:0]	26	I	
+pon0_jf_pri_req	1	O	
+pon0_jf_frm_eop[25:0]	26	I	
+pon1_jf_pri_req	1	O	
+pon1_jf_frm_eop[25:0]	26	I	
+oth_jf_pri_req	1	O	
+oth_jf_frm_eop[15:0]	16	I	
+TX_ITF ITF
+pon_txitf_dec[15:0]	16	I	PON发送数据的指示
+oth_txitf_dec[6:0]	7	I	OTH发送数据的指示
+EPS_DIO ITF
+query_ff_afull_th[1:0]	2	I	查询地址FIFO的将满水线
+efb_cell_size[1:0]	2	I	EFB CELL大小
+rbuf_bp_en	1	I	RBUF的反压使能
+rbuf_bp_th[7:0]	8	I	RBUF的反压水线
+pon_rbuf_bp_en	1	I	PON  RBUF的反压使能
+pon_rbuf_bp_th[7:0]	8	I	PON  RBUF的反压水线
+oth_rbuf_bp_en	1	I	OTH  RBUF的反压使能
+oth_rbuf_bp_th[7:0]	8	I	OTH  RBUF的反压水线
+pon_tx_bp_th[10:0]	11	I	PON TXBUF的反压水线
+eth0_tx_bp_th[9:0]	10	I	GE0 TXBUF的反压水线
+eth1_tx_bp_th[9:0]	10	I	GE1 TXBUF的反压水线
+eth2_tx_bp_th[9:0]	10	I	GE2 TXBUF的反压水线
+eth3_tx_bp_th[9:0]	10	I	GE3 TXBUF的反压水线
+eth4_tx_bp_th[9:0]	10	I	GE4 TXBUF的反压水线
+eth5_tx_bp_th[9:0]	10	I	GE5 TXBUF的反压水线
+pie_tx_bp_th[7:0]	8	I	PIE TXBUF的反压水线
+prbs_tx_bp_th[7:0]	8	I	PRBS TXBUF的反压水线
+woe_tx_bp_th[7:0]	8	I	WOE TXBUF的反压水线
+dcut_pkt_cnt_inc	1	O	DSCH切片报文个数统计
+dsch_query_cnt_inc	1	O	查询地址的次数统计
+query_ff_of_set	1	O	QUERY FIFO上溢
+query_ff_uf_set	1	O	QUERY FIFO下溢
+dsch_state0[31:0]	32	O	DSCH 状态0
+dsch_state1[31:0]	32	O	DSCH 状态1
+dsch_state2[31:0]	32	O	DSCH 状态2
+dsch_state3[31:0]	32	O	DSCH 状态3
+
+3.4.2.3	数据结构
+3.4.2.3.1	DATA_CMD_INFO的数据结构
+表14 DATA_CMD_INFO接口数据结构表
+MSB	LSB	Width	Filed	Description
+27	27	1	frm_sop	报文SOP标识。
+26	24	3	rid	BI_FIFO的ID。
+23	8	16	ccap	当前CELL地址。
+7	5	3	offset	读数据的偏移地址。
+4	0	5	rd_len	当帧尾巴指示为1时才有效，0---8字节，1---16字节，…，7---64字节，…，15---128字节
+
+3.4.2.3.2	BI_FIFO的数据结构
+表15 BI_FIFO接口数据结构表
+MSB	LSB	Width	Name	Description
+99	99	1	east_pkt	ESAT报文标识，高电平有效。
+98	98	1	ext_fd	扩展FD标识
+97	86	12	gemport	GEMPORT
+85	83	3	pon_pri	PON口优先级
+82	82	1	pon_rr	PON轮询标识
+81	81	1	pli	PRBS环回标识，即prbs_loop
+80	80	1	1588i	1588标识
+78	77	2	dgp	端口组号
+79	79	1	mci 	组播标识
+78	68	11	mci_id	组播ID
+67	67	1	ech_err	出端口错误标识
+66	60	7	ech	出端口内部编号
+59	59	1	hd_bd	Head 或Body标识,1:head, 0:body
+58	58	1	sop	Head 开始标识或Payload开始标识
+57	57	1	eop	Head 结束标识或帧尾标识
+56	54	3	pie_chid	PIE 逻辑通道号
+53	44	10	hl	报文头长度（挤气泡）
+43	26	18	bl	报文身体长度
+25	21	5	sport	源端口
+20	5	16	ccap	当前CELL地址
+4	0	5	rd_len	读突发长度（128bit为最小单位），
+0---16字节，2--32字节，…，7---112字节，…，16---256字节...
+
+3.4.2.3.3	INFO_RAM的数据结构
+表16 INFO_RAM接口数据结构表
+MSB	LSB	Width	Name	Description
+73	73	1	east_pkt	ESAT报文标识，高电平有效。
+72	72	1	efb 	报文的efb指示
+71	69	3	offset[2:0]	读数据地址偏移
+68	68	1	jfi	jumbo帧标识
+67	67	1	pli	PRBS环回标识，即prbs_loop
+66	66	1	1588i	1588报文标识
+64	63	2	dgp[1:0]	出端口号
+65	65	1	mci	组播指示
+64	54	11	mc_id[10:0]	组播ID
+53	53	1	ech_err	出端口错误标识
+52	46	7	ech[6:0]	出端口内部编号
+45	45	1	hd_bd	
+44	44	1	sop	报文头标识
+43	41	3	pie_chid[2:0]	pie队列映射结果
+40	31	10	hl[9:0]	Head Burst Length，以byte为单位（块个数+余数：1+9=10bit）
+30	13	18	bl[17:0]	Body Burst Length，以byte为单位（块个数+余数：9+9=18bit）
+12	8	5	sport[4:0]	队列的源端口
+7	1	7	lbc_cnt[6:0]	(left body cell counter)BODY剩余的CELL个数
+0	0	1	lhc_cnt	(left head cell counter)HEAD剩余的CELL个数
+
+3.4.2.3.4	FI_INFO的数据结构
+FI_INFO的数据结构如下：
+表17 FI_INFO数据结构表
+MSB	LSB	Width	Name	Description
+41	41	1	err_echid	错误的ECHID指示
+40	40	1	mci	组播标识
+39	36	4	echid	出端口号
+35	33	3	pie_chid	PIE逻辑通道号
+32	32	1	hd_bd	1:head, 0:body
+31	31	1	sop	HD_BD = 1时，表示HEAD_SOP, HD_BD = 0时，表示BODY_SOP,
+30	27	4	sport	源端口
+26	20	7	lbc_cnt	(left body cell counter)BODY剩余的CELL个数
+19	19	1	lhc_cnt	(left head cell counter)BODY剩余的CELL个数
+18	8	11	bl	Body 长度，字节为单位
+7	0	8	hl	Head 长度，字节为单位
+
+3.4.2.4	设计实现
+DSCH模块采用8拍的固定流水设计，8拍里主要做了上图所示的三部分工作：
+1、通道调度；
+2、切片信息维护和帧地址查询；
+3、产生切片命令。
+通道调度主要是根据各个通道的请求和反压状态进行通道的调度。切片后产生相应的数据读命令送到MEMP/DMC，并将相应的读命令关键信息压入对应的BI_FIFO。IFB的CELL大小为160Byte，切片大小也为160Byte，如果报文缓存在IFB，则每切一次片都需要查询，EFB的一个CELL的大小为256/512/1024/2048Byte，切片大小为256Byte，一个满数据的cell需要切片1/2/4/8次。DSCH模块的关键信号时序如下图所示。
+
+DSCH处理流程：
+DSCH模块最快每8个系统时钟给出一个切片（160B/256B）的读命令，根据如下流水进行操作:
+（0）	空操作； 
+（1）	采样各种调度请求和反压状态；
+（2）	根据通道状态产生端口调度的总请求信号sch_req；
+（3）	A. 端口调度，得出一个通道ID；
+B．根据通道的his_vld判断当前通道是一个新报文还是一个正在切片的历史报文，如果新报文则去读取FD_FIFO获取报文的FD，否则读info_ram，获取报文的历史切片信号；
+（4）	空操作；
+（5）	采样FD或info_ram输出历史切片信息；
+（6）	计数当前的切片长度，产生MEMP/DMC 的读命令；
+（7）	A.发出读MEMP/DMC 的读命令；
+B.如果报文未切完，更新历史切片信息，写入INFO_RAM;
+C.如果报文未切完，且当前的CELL已经切完则需要产生查询下一个CELL的命令，并写入查询接口FIFO；
+D.根据当前的切片长度，统计TX通路上数据量，更新通道反压状态tx_bp。
+（0）	根据调度出的端口所在通道组ID，将切片读命令写入相应的BI_FIFO。
+
+3.4.2.4.1	通道调度设计
+该部分用2拍来实现2级调度，调度策略如下图所示：
+xPON内部16个逻辑通道之间进行SP+RR调度，调度的优先级根据xPON MAC给出的current和next指示，进行CURR > NEXT > Others的SP调度，其中非current和非next的逻辑通道之间进行RR调度，支持优先级抢占和普通模式的调度配置。6GE，PIE、PRBS和WOE之间进行RR调度。通道间调度粒度为IFB 160、EFB 256字节。
+
+请求调度的通道必须满足以下的条件：
+1.	无切片历史，即需要读新的FD：
+1）	通路无反压（根据txbuf深度和已切片数据进行计算）；
+2）	FD_FIFO 非空；
+3）	Bi_FIFO、MEMP/DMC命令FIFO无反压。
+2.	有切片历史：
+1）	历史切片已经ready；（cell切换时NCAP已返回，或同一个cell在切的过程中无需等待NCAP）；
+2）	通路无反压（根据txbuf深度和已切片数据进行计算）；
+3）	Bi_FIFO和MEMP命令FIFO 无反压。
+
+由于报文数据存在IFB、EFB混发，为了减轻端口间EFB的读命令对IFB读命令的阻塞，将所有端口的读命令分为4个读队列进行，PON 2个，WOE1个，6*GE+PIE+PRBS合为一个读队列（同一个队列中的EFB读命令仍然会对同一个队列中的IFB读命令产生阻塞，譬如PON的EFB读命令会阻塞PON口的IFB读命令，但不会阻塞OTH口的读命令）。
+4个BI_FIFO的作用是对发出的读命令进行保序，当读数据返回后，通过RR调度进行选择相应4个BI_FIFO中的读命令，然后到对应数据FIFO中去读取报文数据，将报文数据写入Txbuffer中。PON口的调度需要考虑jumbo帧头、尾的保序。
+PON0_BI_FIFO存的是jumbo帧的数据；PON1_BI_FIFO存的是非jumbo帧的数据；当寄存器配置pon_biff_mode为0时，是双BI_FIFO模式；为1时是单BI_FIFO模式，jumbo帧和非jumbo帧都写入该FIFO。
+通过寄存器配置biff_sch_mode[1:0]可以对BI_FIFO选择不同的调度方式，具体如下：
+biff_sch_mode[1:0]==2’b1x：(PONn+OTH)rr；
+biff_sch_mode[1:0]==2’b01：(PONj)>(PONn+OTH)rr；
+biff_sch_mode[1:0]==2’b00：(PONj+OTHj)>(PONn+OTHn)rr，该模式下，OTH区分jumbo状态和normal状态，有jumbo帧切片的端口优先级为最高，若多个端口组都有jumbo帧切片则进行RR。
+
+	优先级抢占模式
+
+优先级抢占模式下，tcont数目减半，分为8组tcont，调度为： curr_0 > next_0 > curr_1 > next_1 > pon_rr；其中Curr_0/Next_0为组内高优先级的Tcont，Curr_1和Next_1为低优先级的Tcont；
+	普通模式
+CURR > NEXT > PON_RR
+
+为了防止通道过多，轮询延时过大，PON同时只允许一个Tcont存在jumbo帧的切片调度；
+DSCH最快每8拍调度一个160B/256B的块，最大调度带宽为：((160*8bit /(8*2.5) )*109 bps = 64Gbps。
+调度主要考虑的因素有：
+1、	满足PON口的突发的上行带宽；
+2、	Jumbo帧不欠载。
+
+如上图所示，每个BI_FIFO的深度为16，为了限制PON口中低有优先级的PON_RR通道的读命令对高优先级的PON_CURR和PON_NEXT通道的阻塞，会统计进入BI_PON FIFO中PON_RR通道的读命令，配置反压水线，当PON_RR_CMD_CNT大于反压水线时，反压DSCH调度PON_RR通道。
+BI_OTH的命令由5*GE+PIE+PRBS组成，存在EFB和IFB混发，EFB读命令的延时较大，为了防止EFB对IFB读命令的阻塞，会统计BI_FIFO中的EFB读命令个数，配置反压水线，当EFB_CMD_CNT大于反压水线时，反压DSCH调度EFB的通道（PON通道也会出现有的TCONT报文是IFB有的TCONT报文是EFB，BI_PON会有同样的反压机制）。
+Jumbo帧的调度：由于TxBuffer在超过发送水线时才开始启动发送，为防止Jumbo帧发送过程中MAC欠载，采取以下措施：
+1、DSCH在Jumbo帧的切片数目达到发送（或接近）水线时提高有jumbo帧的通道的调度优先级，如果多个端口存在jumbo帧，则进行RR；
+2、PON口中如果有其中一个Tcont有jumbo帧已经启动发送，且TxBuffer没有反压DSCH，则屏蔽PON口其他Jumbo帧tcont的调度； 
+3、由于BI_OTH是由多个端口组成，也有相同的机制限制多个端口同时切片jumbo帧和限制非jumbo帧端口切片命令数目（可配置水线来限制）。DSCH可以最快8拍（通道交织）完成一次切片，最慢16拍（同一通道）完成一次切片；
+4、MEMP EPS数据读端口优先级要仅次于IPS_WR；DMC的PON端口的读报文和OTH组的报文需要走AXI的绿色通道（即EPS需要2个ID走绿色通道,可以认为EFB读数据最大读延时为500ns）。
+延时计算：
+DSCH和BI_FIFO调度是在不同的流水，DSCH的调度8拍一个块，MERGE最慢16拍一个块（通路性能取决于最慢流水级），则PON口jumbo帧切片延时为：3*16 = 48cycle，加上MEMP的一点抖动，保守点按80cycle（200ns）算：
+160*8bit/200ns = 6.4Gbps
+9600Byte jumbo帧的发送时间为：9600B*8/10Gbps = 7680 ns，要想10G端口的Txbuffer在发送过程中不出现空，则有：
+tx_th * 8 bit / (10-6.4) Gbps  >= 7680 ns
+可以得到发送水线tx_th必须大于3456Byte；
+3.4.2.4.2	报文切片信息
+根据当前调度出的通道号，查看该通道的历史状态，如果该通道历史遗留切片则从FD_FIFO读出新的FD，如果有历史遗留切片，则从INFO_RAM中读出切片信息，见3.4.2.3.4所示。 
+3.4.2.4.3	报文切片设计
+主要是根据切片控制信息FI_INFO，对帧进行切片。一般情况下，切片大小160/256Byte，帧头cell或帧尾时不足160Byte则按最小128bit最小单位进行切片,如帧尾的block剩余15byte,则切片长度为16Byte。
+IFB CELL大小为160B，切片大小也是160B，每次切片都需要查询NCAP； 
+EFB的CELL大小为256B、512B、1024B、2048Byte可配置的，当配置为256B时，每1次切片需要1次查询NCAP；配置为512B时，每2次切片需要1次查询；配置为1024B时，每4次切片需要1次查询；配置为2048B时，每8次切片需要1次查询。
+当160/256Byte的Block切片完成后，需要根据切片的情况更新FI_INFO并将更新后的FI_INFO写入FI_INFO RAM中。更新的内容如下：
+1）	报文HEAD剩余cell个数；
+2）	报文BODY剩余CELL个数；
+3）	报文HEAD_BODY指示；
+4）	报文HEAD SOP/BODY SOP；
+5）	报文EFB切片OFFSET位置；
+6）	CELL边界时更新NCAP。
+切片完成后，需要根据当前的切片信息发出读IFB的帧数据的命令，同时需要将读命令的关键信息压入BI_FIFO。读命令和BI_FIFO的写数据的数据结构请见3.4.2.3.2。
+当前切片完成后，如果报文的剩余长度不为0，即剩余的CELL个数不为0，则向FAM发出下一个CELL查询，查询命令是先写入一个FIFO，FIFO的读侧与FAM接口当查询空闲且FIFO非空时就会发起查询操作，这样做的目的是吸收FAM查询的抖动。因为IFB一个CELL的大小就是160Byte，每切完一次160Byte都要去查询下一缓存节点的地址，因此需要每次切片完成之后都要屏蔽当前的通道的调度，直至查询的下一个CELL地址返回。 
+
+3.4.2.4.4	报文CELL的查询处理
+在DTCUT_DCUT状态中，在每次切片完成后（一个CELL只切一次），如果是IFB，剩余的CELL个数不为0，则向FAM发出下一个CELL查询，此时屏蔽当前通道的调度，更新历史状态his_rdy为0，当查询的CELL地址返回时更新his_rdy为1，并将cell地址写入ccap_array中，ccap（当前CELL地址）作为下一次产生切片读命令的地址。ccap_array是用来寄存各个通道的当前cell地址的二维寄存器组，有27个通道，cell地址位宽为13bit,则大小为27x13bit。 
+注意：组播报文的帧头链释放时，增加与merge的释放握手信号，必须等待DSCH查询FAM帧头链尾的下一跳地址返回成功后，merge才释放帧头链，防止出现merge释放帧头链后，dsch查询帧头链的下一跳还没返回导致错误的情况。
+
+
